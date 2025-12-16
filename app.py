@@ -170,10 +170,12 @@ def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt):
     run = p.add_run("二、非固定工作項目（視實際狀況提供）")
     set_run_font(run, bold=True)
 
+    # --- [MODIFIED] 修改合約中的非固定項目描述 ---
     items_non = [
-        "1. 廣告素材建議：乙方得依投放成效、競品與市場狀況，提供素材與文案方向建議。",
-        "2. 到達頁面優化建議：於轉換成效異常或下降時，提供頁面優化方向。"
+        "1. 廣告文案與素材優化：本服務雖以投放操作為主，惟視整體成效需求，乙方得主動提出文案修改建議（如：提供不同版本文案供甲方選擇或修訂）。",
+        "2. 網頁調整建議：為確保廣告宣傳訴求一致並協助達成成效，乙方得針對廣告到達頁面（Landing Page）提供調整建議。"
     ]
+    # ----------------------------------------
     for item in items_non:
         p = doc.add_paragraph(item)
         p.paragraph_format.left_indent = Cm(1.5)
@@ -291,7 +293,15 @@ with st.sidebar:
 # =========================================================
 if nav == "第一階段｜合約":
 
-    # ====== 服務內容說明 UI（保留你原本）======
+    st.info("""
+    💡 **第一階段操作流程**：
+    1. **詳閱服務內容**：確認雙方權利義務與工作範圍。
+    2. **選擇付款方案**：選擇月繳或季繳，並設定合作日期。
+    3. **生成正式合約**：填寫甲方資訊，自動產出 Word 檔。
+    4. **確認與傳送**：下載合約後，請複製底部的「確認訊息」回傳給乙方。
+    """)
+
+    # ====== 服務內容說明 UI ======
     st.header("服務內容說明")
 
     st.subheader("✅ 固定工作")
@@ -301,15 +311,17 @@ if nav == "第一階段｜合約":
 - **簡易週報**（成果摘要、下週優化方向）
 """)
 
+    # --- [MODIFIED] 修改網頁顯示的非固定項目說明 ---
     st.subheader("📌 非固定工作（視狀況提供）")
     st.markdown("""
-- **廣告素材建議**
-  - 依投放成效、競品、市場狀況提出方向
-- **到達頁面優化建議**
-  - 監控轉換成效
+- **廣告文案與素材優化**
+  - 本合作雖以廣告投放為主，但若判斷整體成效有需求，我會主動提出**文案修改建議**（我會給出幾個版本讓你選和修改）。
+- **網頁調整建議**
+  - 為了符合宣傳訴求與達成成效，我會視情況提供網頁的**具體調整建議**。
 """)
+    # ---------------------------------------------
 
-    # 前台白話提醒（你要求：一開始提醒帳號停用＋遠端控制客戶電腦）
+    # 前台白話提醒
     st.info("""
 現況提醒：目前我的 FB 個人帳號仍然被停用，但我仍需要每天監控你的廣告成果。
 因此我會先教你怎麼每天匯出我需要的數據（我會幫你設定好，你每天按一次匯出就可以）。
@@ -363,7 +375,6 @@ if nav == "第一階段｜合約":
         if not party_a_name.strip():
             st.error("請輸入甲方名稱")
         else:
-            # 給甲方訊息（你要：複製後從 LINE 傳給你）
             if payment_option == "17,000元/月（每月付款）":
                 client_msg = f"""【合約確認】
 甲方：{party_a_name}
@@ -402,7 +413,7 @@ if nav == "第一階段｜合約":
 
             st.success("✅ Word 合約已生成！")
 
-    # ====== 輸出（下載不會讓文字消失：用 session_state 撐住）======
+    # ====== 輸出 ======
     if st.session_state.generated:
         st.markdown("---")
         st.subheader("📤 給甲方看的訊息（請複製後用 LINE 傳給我）")
@@ -430,14 +441,22 @@ if nav == "第一階段｜合約":
             st.rerun()
 
 # =========================================================
-# 第二階段｜啟動前確認（即時輸出 × 可備份還原）
+# 第二階段｜啟動前確認
 # =========================================================
 elif nav == "第二階段｜啟動前確認":
 
     st.header("🚀 第二階段｜啟動前確認 & 資料蒐集")
     st.caption("📌 可分次填寫；下方回傳內容會即時更新")
+    
+    st.info("""
+    💡 **第二階段操作流程**：
+    1. **確認資產現況**：勾選您目前的廣告帳號、粉專等設定狀態。
+    2. **填寫行銷情報**：輸入粉專連結、競品資訊以及簡單的市場定位（受眾/痛點）。
+    3. **複製資料回傳**：填寫完畢後，請複製頁面最下方的「回傳內容」透過 LINE 傳給乙方。
+    
+    （若無法一次填完，可利用左側欄的「暫存/還原」功能保存進度，避免重填。）
+    """)
 
-    # ✅ 你要加回來的「服務內容講清楚」：只增補在第二階段最前面
     st.markdown("---")
     st.subheader("📌 服務方式說明（請先閱讀）")
     st.info("""
@@ -456,7 +475,7 @@ elif nav == "第二階段｜啟動前確認":
 - 實際連線操作只做必要動作，速度會非常快
 """)
 
-    # ---------- Sidebar：備份 / 還原（不覆蓋導覽，用 expander 包起來） ----------
+    # ---------- Sidebar：備份 / 還原 ----------
     with st.sidebar:
         with st.expander("🗒️ 暫存 / 還原（貼上備份碼）", expanded=False):
             backup_input = st.text_area(
@@ -468,7 +487,6 @@ elif nav == "第二階段｜啟動前確認":
             def restore_from_backup(text: str):
                 if not text:
                     return
-                # 支援你原本的 key=value 格式，忽略 [CHECK]/[DATA] 這類標頭
                 lines = [l.strip() for l in text.splitlines() if "=" in l and not l.strip().startswith("#")]
                 for line in lines:
                     k, v = line.split("=", 1)
@@ -478,7 +496,6 @@ elif nav == "第二階段｜啟動前確認":
                     if k not in st.session_state:
                         continue
 
-                    # bool
                     if v in ["0", "1"]:
                         st.session_state[k] = True if v == "1" else False
                     else:
@@ -489,7 +506,6 @@ elif nav == "第二階段｜啟動前確認":
                 st.success("✅ 已嘗試還原內容（欄位存在即已帶入）")
                 st.rerun()
 
-    # ---------- 教學影片 ----------
     if PHASE2_TUTORIAL_URL.strip():
         st.video(PHASE2_TUTORIAL_URL)
 
@@ -518,7 +534,7 @@ elif nav == "第二階段｜啟動前確認":
     how_solve = st.text_area("如何解決？", key="how_solve")
     budget = st.text_input("第一個月預算", key="budget")
 
-    # ---------- 備份內容（即時） ----------
+    # ---------- 備份內容 ----------
     backup_text = f"""[CHECK]
 ad_account={1 if ad_account else 0}
 pixel={1 if pixel else 0}
@@ -539,7 +555,7 @@ budget={budget}
     st.subheader("🗂️ 備份用內容（請複製存到筆記本）")
     st.code(backup_text)
 
-    # ---------- 回傳訊息（即時生成） ----------
+    # ---------- 回傳訊息 ----------
     def s(x): 
         return x if str(x).strip() else "（未填）"
 
