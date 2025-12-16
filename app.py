@@ -17,6 +17,9 @@ ACCOUNT_NUMBER = "783540208870"
 # 第二階段教學影片（沒有就先放空字串）
 PHASE2_TUTORIAL_URL = ""
 
+# 遠端協作教學連結（你指定的）
+REMOTE_DESKTOP_SUPPORT_URL = "https://remotedesktop.google.com/support10"
+
 # =========================================================
 # 1) Page config
 # =========================================================
@@ -49,6 +52,10 @@ _init_if_missing("ad_account", False)
 _init_if_missing("pixel", False)
 _init_if_missing("fanpage", False)
 _init_if_missing("bm", False)
+
+# [NEW] Remote Desktop ready
+_init_if_missing("remote_ready", False)
+
 _init_if_missing("fanpage_url", "")
 _init_if_missing("landing_url", "")
 _init_if_missing("comp1", "")
@@ -447,13 +454,13 @@ elif nav == "第二階段｜啟動前確認":
 
     st.header("🚀 第二階段｜啟動前確認 & 資料蒐集")
     st.caption("📌 可分次填寫；下方回傳內容會即時更新")
-    
+
     st.info("""
     💡 **第二階段操作流程**：
     1. **確認資產現況**：勾選您目前的廣告帳號、粉專等設定狀態。
     2. **填寫行銷情報**：輸入粉專連結、競品資訊以及簡單的市場定位（受眾/痛點）。
     3. **複製資料回傳**：填寫完畢後，請複製頁面最下方的「回傳內容」透過 LINE 傳給乙方。
-    
+
     （若無法一次填完，可利用左側欄的「暫存/還原」功能保存進度，避免重填。）
     """)
 
@@ -519,6 +526,14 @@ elif nav == "第二階段｜啟動前確認":
         fanpage = st.checkbox("粉專已建立", key="fanpage")
         bm = st.checkbox("企業管理平台已建立", key="bm")
 
+    # [NEW] 遠端協作提醒（僅提醒，不做 gating）
+    st.markdown("**遠端操作配合（提醒）**")
+    remote_ready = st.checkbox(
+        "已完成 Google 遠端桌面設定，可配合遠端操作",
+        key="remote_ready"
+    )
+    st.caption(f"🔗 設定教學：{REMOTE_DESKTOP_SUPPORT_URL}")
+
     # ---------- 資料填寫 ----------
     st.subheader("🧾 須提供事項")
     fanpage_url = st.text_input("粉專網址", key="fanpage_url")
@@ -540,6 +555,7 @@ ad_account={1 if ad_account else 0}
 pixel={1 if pixel else 0}
 fanpage={1 if fanpage else 0}
 bm={1 if bm else 0}
+remote_ready={1 if remote_ready else 0}
 
 [DATA]
 fanpage_url={fanpage_url}
@@ -556,10 +572,10 @@ budget={budget}
     st.code(backup_text)
 
     # ---------- 回傳訊息 ----------
-    def s(x): 
+    def s(x):
         return x if str(x).strip() else "（未填）"
 
-    def status(v): 
+    def status(v):
         return "✅ 已完成" if v else "⬜ 未完成"
 
     reply_text = f"""請直接複製以下內容，使用 LINE 回傳給我（{PROVIDER_NAME}）：
@@ -572,6 +588,7 @@ budget={budget}
 - 像素事件：{status(pixel)}
 - 粉專：{status(fanpage)}
 - BM：{status(bm)}
+- 遠端操作設定：{status(remote_ready)}（教學：{REMOTE_DESKTOP_SUPPORT_URL}）
 
 【資料】
 - 粉專網址：{s(fanpage_url)}
