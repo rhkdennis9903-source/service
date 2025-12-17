@@ -18,7 +18,7 @@ ACCOUNT_NUMBER = "783540208870"
 PHASE2_TUTORIAL_URL = ""
 
 # 遠端協作教學連結
-REMOTE_DESKTOP_SUPPORT_URL = "https://remotedesktop.google.com/support10"
+REMOTE_DESKTOP_SUPPORT_URL = "https://remotedesktop.google.com"
 
 # =========================================================
 # 1) Page config
