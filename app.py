@@ -47,7 +47,7 @@ _init_if_missing("payment_message", "")
 _init_if_missing("docx_bytes", b"")
 _init_if_missing("last_party_a_name", "")
 _init_if_missing("case_number", "")
-_init_if_missing("client_email", "")  # [NEW] 客戶信箱
+_init_if_missing("client_email", "")  # 客戶信箱
 
 # Phase2 fields
 _init_if_missing("ad_account", False)
@@ -78,7 +78,7 @@ def set_run_font(run, size=12, bold=False):
     run._element.rPr.rFonts.set(qn("w:eastAsia"), "Microsoft JhengHei")
 
 # =========================================================
-# 4) 生成 Word 合約 (修改版：加入編號與信箱)
+# 4) 生成 Word 合約 (含編號與信箱)
 # =========================================================
 def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, case_num):
     doc = Document()
@@ -93,7 +93,7 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
     run = heading.add_run("廣告投放服務合約書")
     set_run_font(run, size=18, bold=True)
     
-    # 案件編號顯示在標題下方
+    # 案件編號
     if case_num:
         sub_head = doc.add_paragraph()
         sub_head.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -274,7 +274,7 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
     table.autofit = False
 
     cell_a = table.cell(0, 0)
-    # [NEW] 將信箱加入甲方簽名欄位
+    # 信箱加入簽名欄
     run = cell_a.paragraphs[0].add_run(
         f"甲方（委託暨付款方）：\n{party_a}\n信箱：{email}\n\n簽名：___________________\n\n日期：_____ 年 ___ 月 ___ 日"
     )
@@ -374,7 +374,7 @@ if nav == "第一階段｜合約":
     st.header("🧾 甲方資訊 & 案件編號")
     party_a_name = st.text_input("甲方名稱（公司或個人）", placeholder="公司或個人名稱")
     
-    # [NEW] 信箱輸入
+    # 信箱輸入
     party_a_email = st.text_input("甲方聯絡信箱（作為案件識別用）", placeholder="example@email.com")
 
     # 案件編號生成按鈕
@@ -410,7 +410,6 @@ if nav == "第一階段｜合約":
     st.header("✅ 生成合約")
 
     if st.button("📝 生成 Word 合約", type="primary", use_container_width=True):
-        # 確保資料都有填
         st.session_state.client_email = party_a_email
 
         if not party_a_name.strip():
@@ -420,6 +419,7 @@ if nav == "第一階段｜合約":
         elif not st.session_state.case_number:
             st.error("請先點擊生成案件編號")
         else:
+            # [修正點] 第一階段回傳訊息加入信箱
             if payment_option == "17,000元/月（每月付款）":
                 client_msg = f"""【合約確認】
 案件編號：{st.session_state.case_number}
@@ -508,7 +508,6 @@ elif nav == "第二階段｜啟動前確認":
     with c_phase2_1:
         case_num_input = st.text_input("案件編號", value=st.session_state.case_number, placeholder="例如：客戶名_20231025")
     with c_phase2_2:
-        # [NEW] 第二階段信箱確認
         email_input = st.text_input("聯絡信箱", value=st.session_state.client_email, placeholder="example@email.com")
 
     # 更新 session state
@@ -613,7 +612,6 @@ elif nav == "第二階段｜啟動前確認":
     budget = st.text_input("第一個月預算", key="budget")
 
     # ---------- 備份內容 ----------
-    # [NEW] 備份增加 email
     backup_text = f"""[CHECK]
 ad_account={1 if ad_account else 0}
 pixel={1 if pixel else 0}
@@ -644,7 +642,6 @@ budget={budget}
     def status(v):
         return "✅ 已完成" if v else "⬜ 未完成"
 
-    # [NEW] 回傳增加 email
     reply_text = f"""請直接複製以下內容，使用 LINE 回傳給我（{PROVIDER_NAME}）：
 
 【第二階段啟動資料】
