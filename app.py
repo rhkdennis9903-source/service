@@ -17,7 +17,7 @@ ACCOUNT_NUMBER = "783540208870"
 # 第二階段教學影片（沒有就先放空字串）
 PHASE2_TUTORIAL_URL = ""
 
-# 遠端協作教學連結（你指定的）
+# 遠端協作教學連結
 REMOTE_DESKTOP_SUPPORT_URL = "https://remotedesktop.google.com/support10"
 
 # =========================================================
@@ -46,6 +46,7 @@ _init_if_missing("client_message", "")
 _init_if_missing("payment_message", "")
 _init_if_missing("docx_bytes", b"")
 _init_if_missing("last_party_a_name", "")
+_init_if_missing("case_number", "")  # [NEW] 案件編號
 
 # Phase2 fields
 _init_if_missing("ad_account", False)
@@ -53,7 +54,7 @@ _init_if_missing("pixel", False)
 _init_if_missing("fanpage", False)
 _init_if_missing("bm", False)
 
-# [NEW] Remote Desktop ready
+# Remote Desktop ready
 _init_if_missing("remote_ready", False)
 
 _init_if_missing("fanpage_url", "")
@@ -76,9 +77,9 @@ def set_run_font(run, size=12, bold=False):
     run._element.rPr.rFonts.set(qn("w:eastAsia"), "Microsoft JhengHei")
 
 # =========================================================
-# 4) 生成 Word 合約
+# 4) 生成 Word 合約 (修改版：加入案件編號)
 # =========================================================
-def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt):
+def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt, case_num):
     doc = Document()
 
     # 全文行距
@@ -90,6 +91,14 @@ def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt):
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = heading.add_run("廣告投放服務合約書")
     set_run_font(run, size=18, bold=True)
+    
+    # [NEW] 案件編號顯示在標題下方
+    if case_num:
+        sub_head = doc.add_paragraph()
+        sub_head.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run_sub = sub_head.add_run(f"案件編號：{case_num}")
+        set_run_font(run_sub, size=10, bold=False)
+    
     doc.add_paragraph("")
 
     # 變數
@@ -177,12 +186,10 @@ def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt):
     run = p.add_run("二、非固定工作項目（視實際狀況提供）")
     set_run_font(run, bold=True)
 
-    # --- [MODIFIED] 修改合約中的非固定項目描述 ---
     items_non = [
         "1. 廣告文案與素材優化：本服務雖以投放操作為主，惟視整體成效需求，乙方得主動提出文案修改建議（如：提供不同版本文案供甲方選擇或修訂）。",
         "2. 網頁調整建議：為確保廣告宣傳訴求一致並協助達成成效，乙方得針對廣告到達頁面（Landing Page）提供調整建議。"
     ]
-    # ----------------------------------------
     for item in items_non:
         p = doc.add_paragraph(item)
         p.paragraph_format.left_indent = Cm(1.5)
@@ -304,8 +311,9 @@ if nav == "第一階段｜合約":
     💡 **第一階段操作流程**：
     1. **詳閱服務內容**：確認雙方權利義務與工作範圍。
     2. **選擇付款方案**：選擇月繳或季繳，並設定合作日期。
-    3. **生成正式合約**：填寫甲方資訊，自動產出 Word 檔。
-    4. **確認與傳送**：下載合約後，請複製底部的「確認訊息」回傳給乙方。
+    3. **生成案件編號**：輸入甲方名稱後，先點擊生成案件編號。
+    4. **生成正式合約**：自動產出 Word 檔（含編號）。
+    5. **確認與傳送**：下載合約後，請複製底部的「確認訊息」回傳給乙方。
     """)
 
     # ====== 服務內容說明 UI ======
@@ -318,7 +326,6 @@ if nav == "第一階段｜合約":
 - **簡易週報**（成果摘要、下週優化方向）
 """)
 
-    # --- [MODIFIED] 修改網頁顯示的非固定項目說明 ---
     st.subheader("📌 非固定工作（視狀況提供）")
     st.markdown("""
 - **廣告文案與素材優化**
@@ -326,9 +333,7 @@ if nav == "第一階段｜合約":
 - **網頁調整建議**
   - 為了符合宣傳訴求與達成成效，我會視情況提供網頁的**具體調整建議**。
 """)
-    # ---------------------------------------------
 
-    # 前台白話提醒
     st.info("""
 現況提醒：目前我的 FB 個人帳號仍然被停用，但我仍需要每天監控你的廣告成果。
 因此我會先教你怎麼每天匯出我需要的數據（我會幫你設定好，你每天按一次匯出就可以）。
@@ -364,8 +369,28 @@ if nav == "第一階段｜合約":
 
     st.markdown("---")
 
-    st.header("🧾 甲方資訊")
+    st.header("🧾 甲方資訊 & 案件編號")
     party_a_name = st.text_input("甲方名稱（公司或個人）", placeholder="公司或個人名稱")
+
+    # [NEW] 案件編號生成按鈕
+    col_gen1, col_gen2 = st.columns([1, 2])
+    with col_gen1:
+        if st.button("🎲 生成案件編號", type="secondary"):
+            if not party_a_name.strip():
+                st.error("請先輸入甲方名稱")
+            else:
+                date_str = datetime.now().strftime("%Y%m%d")
+                # 簡單處理檔名中的非法字元
+                safe_name = "".join([c for c in party_a_name if c.isalnum() or c in (" ", "_", "-")]).strip()
+                st.session_state.case_number = f"{safe_name}_{date_str}"
+    
+    # [NEW] 顯示案件編號 (可複製的 Markdown)
+    if st.session_state.case_number:
+        st.caption("案件編號（請複製保存）：")
+        st.code(st.session_state.case_number, language="markdown")
+    else:
+        st.caption("請點擊上方按鈕生成編號")
+
 
     st.header("👤 乙方資訊（固定）")
     st.text_input("乙方", value=PROVIDER_NAME, disabled=True)
@@ -381,9 +406,12 @@ if nav == "第一階段｜合約":
     if st.button("📝 生成 Word 合約", type="primary", use_container_width=True):
         if not party_a_name.strip():
             st.error("請輸入甲方名稱")
+        elif not st.session_state.case_number:
+            st.error("請先點擊生成案件編號")
         else:
             if payment_option == "17,000元/月（每月付款）":
                 client_msg = f"""【合約確認】
+案件編號：{st.session_state.case_number}
 甲方：{party_a_name}
 乙方：{PROVIDER_NAME}
 方案：17,000元/月
@@ -392,6 +420,7 @@ if nav == "第一階段｜合約":
 """
             else:
                 client_msg = f"""【合約確認】
+案件編號：{st.session_state.case_number}
 甲方：{party_a_name}
 乙方：{PROVIDER_NAME}
 方案：45,000元/三個月（一次付清）
@@ -409,7 +438,8 @@ if nav == "第一階段｜合約":
                 payment_opt=payment_option,
                 start_dt=start_date,
                 pay_day=payment_day,
-                pay_dt=payment_date
+                pay_dt=payment_date,
+                case_num=st.session_state.case_number  # 傳入編號
             )
 
             st.session_state.client_message = client_msg
@@ -429,7 +459,7 @@ if nav == "第一階段｜合約":
         st.subheader("💳 收款資訊（可直接複製）")
         st.code(st.session_state.payment_message, language=None)
 
-        filename = f"廣告投放合約_{st.session_state.last_party_a_name}_{datetime.now().strftime('%Y%m%d')}.docx"
+        filename = f"廣告投放合約_{st.session_state.case_number}.docx"
         st.download_button(
             label="⬇️ 下載 Word 合約 (.docx)",
             data=st.session_state.docx_bytes,
@@ -445,6 +475,7 @@ if nav == "第一階段｜合約":
             st.session_state.client_message = ""
             st.session_state.payment_message = ""
             st.session_state.docx_bytes = b""
+            st.session_state.case_number = "" # 清除編號
             st.rerun()
 
 # =========================================================
@@ -455,13 +486,21 @@ elif nav == "第二階段｜啟動前確認":
     st.header("🚀 第二階段｜啟動前確認 & 資料蒐集")
     st.caption("📌 可分次填寫；下方回傳內容會即時更新")
 
+    # [NEW] 第二階段手動輸入/確認案件編號
+    st.info("請確認案件編號（若為空請手動貼上）")
+    case_num_input = st.text_input("案件編號", value=st.session_state.case_number, placeholder="例如：客戶名_20231025")
+    # 更新 session state
+    if case_num_input != st.session_state.case_number:
+        st.session_state.case_number = case_num_input
+
+    st.markdown("---")
+
     st.info("""
     💡 **第二階段操作流程**：
-    1. **確認資產現況**：勾選您目前的廣告帳號、粉專等設定狀態。
-    2. **填寫行銷情報**：輸入粉專連結、競品資訊以及簡單的市場定位（受眾/痛點）。
-    3. **複製資料回傳**：填寫完畢後，請複製頁面最下方的「回傳內容」透過 LINE 傳給乙方。
-
-    （若無法一次填完，可利用左側欄的「暫存/還原」功能保存進度，避免重填。）
+    1. **確認案件編號**：確保上方欄位有編號。
+    2. **確認資產現況**：勾選您目前的廣告帳號、粉專等設定狀態。
+    3. **填寫行銷情報**：輸入粉專連結、競品資訊以及簡單的市場定位（受眾/痛點）。
+    4. **複製資料回傳**：填寫完畢後，請複製頁面最下方的「回傳內容」透過 LINE 傳給乙方。
     """)
 
     st.markdown("---")
@@ -526,7 +565,7 @@ elif nav == "第二階段｜啟動前確認":
         fanpage = st.checkbox("粉專已建立", key="fanpage")
         bm = st.checkbox("企業管理平台已建立", key="bm")
 
-    # [NEW] 遠端協作提醒（僅提醒，不做 gating）
+    # 遠端協作提醒
     st.markdown("**遠端操作配合（提醒）**")
     remote_ready = st.checkbox(
         "已完成 Google 遠端桌面設定，可配合遠端操作",
@@ -558,6 +597,7 @@ bm={1 if bm else 0}
 remote_ready={1 if remote_ready else 0}
 
 [DATA]
+case_number={st.session_state.case_number}
 fanpage_url={fanpage_url}
 landing_url={landing_url}
 comp1={comp1}
@@ -581,6 +621,7 @@ budget={budget}
     reply_text = f"""請直接複製以下內容，使用 LINE 回傳給我（{PROVIDER_NAME}）：
 
 【第二階段啟動資料】
+案件編號：{s(st.session_state.case_number)}
 甲方：{st.session_state.get("last_party_a_name","（未填）")}
 
 【確認事項】
