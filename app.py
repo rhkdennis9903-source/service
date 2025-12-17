@@ -18,7 +18,7 @@ ACCOUNT_NUMBER = "783540208870"
 PHASE2_TUTORIAL_URL = ""
 
 # 遠端協作教學連結
-REMOTE_DESKTOP_SUPPORT_URL = "https://remotedesktop.google.com"
+REMOTE_DESKTOP_SUPPORT_URL = "https://remotedesktop.google.com/support10"
 
 # =========================================================
 # 1) Page config
@@ -46,7 +46,8 @@ _init_if_missing("client_message", "")
 _init_if_missing("payment_message", "")
 _init_if_missing("docx_bytes", b"")
 _init_if_missing("last_party_a_name", "")
-_init_if_missing("case_number", "")  # [NEW] 案件編號
+_init_if_missing("case_number", "")
+_init_if_missing("client_email", "")  # [NEW] 客戶信箱
 
 # Phase2 fields
 _init_if_missing("ad_account", False)
@@ -77,9 +78,9 @@ def set_run_font(run, size=12, bold=False):
     run._element.rPr.rFonts.set(qn("w:eastAsia"), "Microsoft JhengHei")
 
 # =========================================================
-# 4) 生成 Word 合約 (修改版：加入案件編號)
+# 4) 生成 Word 合約 (修改版：加入編號與信箱)
 # =========================================================
-def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt, case_num):
+def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, case_num):
     doc = Document()
 
     # 全文行距
@@ -92,7 +93,7 @@ def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt, case_nu
     run = heading.add_run("廣告投放服務合約書")
     set_run_font(run, size=18, bold=True)
     
-    # [NEW] 案件編號顯示在標題下方
+    # 案件編號顯示在標題下方
     if case_num:
         sub_head = doc.add_paragraph()
         sub_head.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -273,8 +274,9 @@ def generate_docx_bytes(party_a, payment_opt, start_dt, pay_day, pay_dt, case_nu
     table.autofit = False
 
     cell_a = table.cell(0, 0)
+    # [NEW] 將信箱加入甲方簽名欄位
     run = cell_a.paragraphs[0].add_run(
-        f"甲方（委託暨付款方）：\n{party_a}\n\n簽名：___________________\n\n日期：_____ 年 ___ 月 ___ 日"
+        f"甲方（委託暨付款方）：\n{party_a}\n信箱：{email}\n\n簽名：___________________\n\n日期：_____ 年 ___ 月 ___ 日"
     )
     set_run_font(run, size=12)
 
@@ -311,8 +313,8 @@ if nav == "第一階段｜合約":
     💡 **第一階段操作流程**：
     1. **詳閱服務內容**：確認雙方權利義務與工作範圍。
     2. **選擇付款方案**：選擇月繳或季繳，並設定合作日期。
-    3. **生成案件編號**：輸入甲方名稱後，先點擊生成案件編號。
-    4. **生成正式合約**：自動產出 Word 檔（含編號）。
+    3. **生成案件編號**：輸入甲方名稱與信箱後，先點擊生成案件編號。
+    4. **生成正式合約**：自動產出 Word 檔（含編號與信箱）。
     5. **確認與傳送**：下載合約後，請複製底部的「確認訊息」回傳給乙方。
     """)
 
@@ -371,8 +373,11 @@ if nav == "第一階段｜合約":
 
     st.header("🧾 甲方資訊 & 案件編號")
     party_a_name = st.text_input("甲方名稱（公司或個人）", placeholder="公司或個人名稱")
+    
+    # [NEW] 信箱輸入
+    party_a_email = st.text_input("甲方聯絡信箱（作為案件識別用）", placeholder="example@email.com")
 
-    # [NEW] 案件編號生成按鈕
+    # 案件編號生成按鈕
     col_gen1, col_gen2 = st.columns([1, 2])
     with col_gen1:
         if st.button("🎲 生成案件編號", type="secondary"):
@@ -380,11 +385,12 @@ if nav == "第一階段｜合約":
                 st.error("請先輸入甲方名稱")
             else:
                 date_str = datetime.now().strftime("%Y%m%d")
-                # 簡單處理檔名中的非法字元
                 safe_name = "".join([c for c in party_a_name if c.isalnum() or c in (" ", "_", "-")]).strip()
                 st.session_state.case_number = f"{safe_name}_{date_str}"
+                # 同步更新信箱到 session
+                st.session_state.client_email = party_a_email
     
-    # [NEW] 顯示案件編號 (可複製的 Markdown)
+    # 顯示案件編號
     if st.session_state.case_number:
         st.caption("案件編號（請複製保存）：")
         st.code(st.session_state.case_number, language="markdown")
@@ -404,8 +410,13 @@ if nav == "第一階段｜合約":
     st.header("✅ 生成合約")
 
     if st.button("📝 生成 Word 合約", type="primary", use_container_width=True):
+        # 確保資料都有填
+        st.session_state.client_email = party_a_email
+
         if not party_a_name.strip():
             st.error("請輸入甲方名稱")
+        elif not party_a_email.strip():
+            st.error("請輸入甲方聯絡信箱")
         elif not st.session_state.case_number:
             st.error("請先點擊生成案件編號")
         else:
@@ -413,6 +424,7 @@ if nav == "第一階段｜合約":
                 client_msg = f"""【合約確認】
 案件編號：{st.session_state.case_number}
 甲方：{party_a_name}
+信箱：{party_a_email}
 乙方：{PROVIDER_NAME}
 方案：17,000元/月
 啟動：{start_date.strftime('%Y-%m-%d')}
@@ -422,6 +434,7 @@ if nav == "第一階段｜合約":
                 client_msg = f"""【合約確認】
 案件編號：{st.session_state.case_number}
 甲方：{party_a_name}
+信箱：{party_a_email}
 乙方：{PROVIDER_NAME}
 方案：45,000元/三個月（一次付清）
 啟動：{start_date.strftime('%Y-%m-%d')}
@@ -435,11 +448,12 @@ if nav == "第一階段｜合約":
 
             docx_bytes = generate_docx_bytes(
                 party_a=party_a_name,
+                email=party_a_email,
                 payment_opt=payment_option,
                 start_dt=start_date,
                 pay_day=payment_day,
                 pay_dt=payment_date,
-                case_num=st.session_state.case_number  # 傳入編號
+                case_num=st.session_state.case_number
             )
 
             st.session_state.client_message = client_msg
@@ -475,7 +489,8 @@ if nav == "第一階段｜合約":
             st.session_state.client_message = ""
             st.session_state.payment_message = ""
             st.session_state.docx_bytes = b""
-            st.session_state.case_number = "" # 清除編號
+            st.session_state.case_number = ""
+            st.session_state.client_email = ""
             st.rerun()
 
 # =========================================================
@@ -486,18 +501,27 @@ elif nav == "第二階段｜啟動前確認":
     st.header("🚀 第二階段｜啟動前確認 & 資料蒐集")
     st.caption("📌 可分次填寫；下方回傳內容會即時更新")
 
-    # [NEW] 第二階段手動輸入/確認案件編號
-    st.info("請確認案件編號（若為空請手動貼上）")
-    case_num_input = st.text_input("案件編號", value=st.session_state.case_number, placeholder="例如：客戶名_20231025")
+    # 手動輸入/確認案件編號
+    st.info("請確認案件編號與信箱（自動帶入，若為空請手動貼上）")
+    
+    c_phase2_1, c_phase2_2 = st.columns(2)
+    with c_phase2_1:
+        case_num_input = st.text_input("案件編號", value=st.session_state.case_number, placeholder="例如：客戶名_20231025")
+    with c_phase2_2:
+        # [NEW] 第二階段信箱確認
+        email_input = st.text_input("聯絡信箱", value=st.session_state.client_email, placeholder="example@email.com")
+
     # 更新 session state
     if case_num_input != st.session_state.case_number:
         st.session_state.case_number = case_num_input
+    if email_input != st.session_state.client_email:
+        st.session_state.client_email = email_input
 
     st.markdown("---")
 
     st.info("""
     💡 **第二階段操作流程**：
-    1. **確認案件編號**：確保上方欄位有編號。
+    1. **確認基本資料**：確保上方案件編號與信箱正確。
     2. **確認資產現況**：勾選您目前的廣告帳號、粉專等設定狀態。
     3. **填寫行銷情報**：輸入粉專連結、競品資訊以及簡單的市場定位（受眾/痛點）。
     4. **複製資料回傳**：填寫完畢後，請複製頁面最下方的「回傳內容」透過 LINE 傳給乙方。
@@ -589,6 +613,7 @@ elif nav == "第二階段｜啟動前確認":
     budget = st.text_input("第一個月預算", key="budget")
 
     # ---------- 備份內容 ----------
+    # [NEW] 備份增加 email
     backup_text = f"""[CHECK]
 ad_account={1 if ad_account else 0}
 pixel={1 if pixel else 0}
@@ -598,6 +623,7 @@ remote_ready={1 if remote_ready else 0}
 
 [DATA]
 case_number={st.session_state.case_number}
+client_email={st.session_state.client_email}
 fanpage_url={fanpage_url}
 landing_url={landing_url}
 comp1={comp1}
@@ -618,10 +644,12 @@ budget={budget}
     def status(v):
         return "✅ 已完成" if v else "⬜ 未完成"
 
+    # [NEW] 回傳增加 email
     reply_text = f"""請直接複製以下內容，使用 LINE 回傳給我（{PROVIDER_NAME}）：
 
 【第二階段啟動資料】
 案件編號：{s(st.session_state.case_number)}
+信箱：{s(st.session_state.client_email)}
 甲方：{st.session_state.get("last_party_a_name","（未填）")}
 
 【確認事項】
