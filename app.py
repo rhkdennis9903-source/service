@@ -20,7 +20,10 @@ BANK_NAME = "中國信託商業銀行"
 BANK_CODE = "822"
 ACCOUNT_NUMBER = "783540208870"
 REMOTE_SUPPORT_URL = "https://remotedesktop.google.com/support10"
-CREATIVES_UPLOAD_URL = "https://metaads-dtwbm3ntmprhjvpv6ptmec.streamlit.app/" # 素材上傳網址
+CREATIVES_UPLOAD_URL = "https://metaads-dtwbm3ntmprhjvpv6ptmec.streamlit.app/" 
+
+# 【新增】教學影片連結 (若為空字串 "" 則不會顯示)
+BM_TUTORIAL_URL = "https://youtu.be/caoZAO8tyNs" 
 
 st.set_page_config(page_title="廣告投放服務系統", page_icon="📝", layout="centered")
 
@@ -63,11 +66,6 @@ def send_email(subject, body):
 # =========================================================
 # 2) 核心邏輯：資料映射 (Mapping)
 # =========================================================
-# 欄位對應說明 (0-based index from gspread records / 1-based for update_cells)
-# ...原有欄位...
-# 25 (Z): chk_remote
-# 26 (AA): chk_creatives (NEW)
-
 def find_user_row(email):
     """回傳 (row_index, row_data_dict) 或 (None, None)"""
     ws = get_worksheet()
@@ -92,7 +90,7 @@ def save_phase1_new(data_dict):
         s("plan"), # plan_raw
         f"{s('case_id')} ({s('party_a')})", # display_label
         "FALSE", # chk_remote (Z欄)
-        "FALSE"  # chk_creatives (AA欄) - NEW
+        "FALSE"  # chk_creatives (AA欄)
     ]
     ws.append_row(row)
 
@@ -126,13 +124,13 @@ def update_phase2(row_num, p2_data):
     # Remote (Z:26)
     cells.append(Cell(26, p2_data["chk_remote"]))
 
-    # Creatives (AA:27) - NEW
+    # Creatives (AA:27)
     cells.append(Cell(27, p2_data["chk_creatives"]))
 
     ws.update_cells(cells)
 
 # =========================================================
-# 3) Word 生成 (保持不變)
+# 3) Word 生成
 # =========================================================
 def set_run_font(run, size=12, bold=False):
     run.font.name = "Microsoft JhengHei"
@@ -342,6 +340,11 @@ elif nav == "第二階段｜啟動前確認":
     def b(k): return str(raw.get(k, "FALSE")).upper() == "TRUE"
     def s(k): return raw.get(k, "")
 
+    # 【新增】教學影片區塊 (使用 expander 避免佔空間)
+    if BM_TUTORIAL_URL.strip():
+        with st.expander("📺 [教學影片] 如何設定企業管理平台 (BM)？"):
+            st.video(BM_TUTORIAL_URL)
+
     # 第一列確認事項
     c1, c2 = st.columns(2)
     with c1:
@@ -352,7 +355,7 @@ elif nav == "第二階段｜啟動前確認":
         bm = st.checkbox("BM OK", value=b("chk_bm"))
 
     st.markdown("---")
-    # 遠端 與 素材 (特殊項目)
+    # 遠端 與 素材
     c3, c4 = st.columns(2)
     with c3:
         st.markdown("**1. 遠端設定**")
@@ -361,7 +364,6 @@ elif nav == "第二階段｜啟動前確認":
     
     with c4:
         st.markdown("**2. 素材上傳**")
-        # NEW: 素材上傳 checkbox
         creatives_done = st.checkbox("已前往上傳素材", value=b("chk_creatives"))
         st.caption(f"[點擊前往上傳系統]({CREATIVES_UPLOAD_URL})")
 
@@ -385,7 +387,7 @@ elif nav == "第二階段｜啟動前確認":
         p2_payload = {
             "chk_ad_account": ad, "chk_pixel": px, "chk_fanpage": fp, "chk_bm": bm,
             "chk_remote": rem,
-            "chk_creatives": creatives_done, # NEW
+            "chk_creatives": creatives_done,
             "fanpage_url": fp_url, "landing_url": ld_url,
             "comp1": cp1, "comp2": cp2, "comp3": cp3,
             "who_problem": who, "what_problem": what, "how_solve": how,
