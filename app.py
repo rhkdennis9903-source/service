@@ -1,25 +1,25 @@
 import streamlit as st
+import sys
+import os
+# Fix for Streamlit Cloud path resolution
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from services.google_sheet import get_sheet_service
 from services.email_service import send_update_notification
 from views.stage1 import render_stage1
 from views.stage2 import render_stage2
 import time
-
 st.set_page_config(
     page_title="廣告投放服務系統",
     page_icon="📝",
     layout="centered"
 )
-
 # Initialize Session State
 if 'user_data' not in st.session_state:
     st.session_state['user_data'] = None
 if 'auth_mode' not in st.session_state:
     st.session_state['auth_mode'] = None # 'register' or 'login'
-
 def main():
     st.title("📝 廣告投放服務系統")
-
     # Sidebar Navigation
     with st.sidebar:
         st.header("功能選單")
@@ -39,7 +39,6 @@ def main():
                 st.session_state['auth_mode'] = 'register'
             else:
                 st.session_state['auth_mode'] = 'login'
-
     # Main Area Logic
     if not st.session_state['user_data']:
         if st.session_state['auth_mode'] == 'register':
@@ -58,7 +57,6 @@ def main():
         else:
              # Fresh user
              handle_stage1_flow(user)
-
 def handle_register():
     st.subheader("🆕 客戶建檔")
     with st.form("register_form"):
@@ -86,7 +84,6 @@ def handle_register():
                     "Status": "New"
                 }
                 st.rerun()
-
 def handle_login():
     st.subheader("🔑 客戶登入")
     with st.form("login_form"):
@@ -109,7 +106,6 @@ def handle_login():
                 st.rerun()
             else:
                 st.error("找不到此信箱的資料，請先建檔。")
-
 def handle_stage1_flow(user):
     # Render Stage 1 View
     # returns data if submitted
@@ -136,7 +132,6 @@ def handle_stage1_flow(user):
             st.rerun()
         else:
             status_msg.error("儲存失敗，請檢查網路或聯絡管理員。")
-
 def handle_stage2_flow(user):
     # Render Stage 2 View
     updates = render_stage2(user)
@@ -159,6 +154,5 @@ def handle_stage2_flow(user):
             st.rerun()
         else:
             status_msg.error("更新失敗。")
-
 if __name__ == "__main__":
     main()
