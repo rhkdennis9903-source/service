@@ -13,7 +13,6 @@ from docx.oxml.ns import qn
 # =========================================================
 # 0) 基礎設定
 # =========================================================
-# 請將此換成您實際的 Google Sheet 網址
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1zXHavJqhOBq1-m_VR7sxMkeOHdXoD9EmQCEM1Nl816I/edit?usp=sharing"
 
 PROVIDER_NAME = "高如慧"
@@ -21,6 +20,7 @@ BANK_NAME = "中國信託商業銀行"
 BANK_CODE = "822"
 ACCOUNT_NUMBER = "783540208870"
 REMOTE_SUPPORT_URL = "https://remotedesktop.google.com/support10"
+CREATIVES_UPLOAD_URL = "https://metaads-dtwbm3ntmprhjvpv6ptmec.streamlit.app/" # 素材上傳網址
 
 st.set_page_config(page_title="廣告投放服務系統", page_icon="📝", layout="centered")
 
@@ -38,7 +38,7 @@ def get_gsheet_client():
 def get_worksheet():
     client = get_gsheet_client()
     sheet = client.open_by_url(SHEET_URL)
-    return sheet.get_worksheet(0)  # 讀取第一個工作表
+    return sheet.get_worksheet(0)
 
 def send_email(subject, body):
     """寄送通知信給管理員"""
@@ -63,19 +63,16 @@ def send_email(subject, body):
 # =========================================================
 # 2) 核心邏輯：資料映射 (Mapping)
 # =========================================================
-# 這是您檔案的欄位順序 (0-based index)
-# Email(0), case_id(1), party_a(2), provider(3), plan(4), start_date(5), pay_day(6), pay_date(7),
-# chk_ad_account(8), chk_pixel(9), chk_fanpage(10), chk_bm(11), fanpage_url(12), landing_url(13),
-# comp1(14), comp2(15), comp3(16), who_problem(17), what_problem(18), how_solve(19), budget(20),
-# last_update_at(21), msg_type(22), plan_raw(23), display_label(24)
-# NEW: chk_remote(25) -> 新增在最後
+# 欄位對應說明 (0-based index from gspread records / 1-based for update_cells)
+# ...原有欄位...
+# 25 (Z): chk_remote
+# 26 (AA): chk_creatives (NEW)
 
 def find_user_row(email):
     """回傳 (row_index, row_data_dict) 或 (None, None)"""
     ws = get_worksheet()
-    records = ws.get_all_records() # 會使用第一列作為 Key
+    records = ws.get_all_records()
     for i, record in enumerate(records):
-        # gspread 的 records 是從第2列開始算 index 0，所以真實列號是 i + 2
         if record.get("Email") == email:
             return i + 2, record
     return None, None
@@ -83,8 +80,6 @@ def find_user_row(email):
 def save_phase1_new(data_dict):
     """建檔：新增一列"""
     ws = get_worksheet()
-    # 建構一整列的資料，依照順序填入
-    # 若欄位是日期物件，轉字串
     def s(key): return data_dict.get(key, "")
     
     row = [
@@ -94,37 +89,27 @@ def save_phase1_new(data_dict):
         "", "", "", "", "", "", "", "", "", # Phase 2 strings init
         datetime.now().strftime("%Y-%m-%d %H:%M:%S"), # last_update_at
         "contract", # msg_type
-        s("plan"), # plan_raw (暫存一樣的)
+        s("plan"), # plan_raw
         f"{s('case_id')} ({s('party_a')})", # display_label
-        "FALSE" # chk_remote (新欄位)
+        "FALSE", # chk_remote (Z欄)
+        "FALSE"  # chk_creatives (AA欄) - NEW
     ]
     ws.append_row(row)
 
 def update_phase2(row_num, p2_data):
     """更新：修改指定列的 Phase 2 欄位"""
     ws = get_worksheet()
-    # 根據欄位順序更新 (gspread update_cell 是 1-based)
-    # 欄位映射：
-    # chk_ad_account(I:9), chk_pixel(J:10), chk_fanpage(K:11), chk_bm(L:12)
-    # fanpage_url(M:13), landing_url(N:14)
-    # comp1(O:15), comp2(P:16), comp3(Q:17)
-    # who(R:18), what(S:19), how(T:20), budget(U:21)
-    # last_update(V:22)
-    # chk_remote(Z:26) -> 假設原有 25 欄，新增在第 26 欄
     
-    # 準備要更新的儲存格列表 (Batch update 比較快)
     cells = []
-    
-    # Helper to create Cell object
     def Cell(col, val): return gspread.Cell(row_num, col, str(val))
 
-    # Checkboxes
+    # Checkboxes (I:9 ~ L:12)
     cells.append(Cell(9, p2_data["chk_ad_account"]))
     cells.append(Cell(10, p2_data["chk_pixel"]))
     cells.append(Cell(11, p2_data["chk_fanpage"]))
     cells.append(Cell(12, p2_data["chk_bm"]))
     
-    # Text Fields
+    # Text Fields (M:13 ~ U:21)
     cells.append(Cell(13, p2_data["fanpage_url"]))
     cells.append(Cell(14, p2_data["landing_url"]))
     cells.append(Cell(15, p2_data["comp1"]))
@@ -135,11 +120,14 @@ def update_phase2(row_num, p2_data):
     cells.append(Cell(20, p2_data["how_solve"]))
     cells.append(Cell(21, p2_data["budget"]))
     
-    # Update Time
+    # Update Time (V:22)
     cells.append(Cell(22, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     
-    # Remote (第 26 欄)
+    # Remote (Z:26)
     cells.append(Cell(26, p2_data["chk_remote"]))
+
+    # Creatives (AA:27) - NEW
+    cells.append(Cell(27, p2_data["chk_creatives"]))
 
     ws.update_cells(cells)
 
@@ -184,13 +172,11 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
     doc.add_paragraph("")
     doc.add_paragraph("雙方同意依下列條款進行廣告投放合作：")
     
-    # 簡化版條款 (示意)
     items = ["一、合約期間", period_txt, "二、服務內容", "廣告上架、監控優化、簡易週報。", "三、費用", price_txt, pay_txt]
     for i in items:
         p = doc.add_paragraph(i)
         set_run_font(p.runs[0])
 
-    # 簽名欄
     doc.add_paragraph("\n")
     table = doc.add_table(rows=1, cols=2)
     c1 = table.cell(0, 0)
@@ -207,7 +193,7 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
 # 4) 主程式與 Sidebar 邏輯
 # =========================================================
 if "user" not in st.session_state:
-    st.session_state.user = None # {email, name, role, row_num, raw_data}
+    st.session_state.user = None 
 
 with st.sidebar:
     st.title("系統入口")
@@ -221,7 +207,6 @@ with st.sidebar:
             if not reg_name or not reg_email.endswith("@gmail.com"):
                 st.error("請輸入名稱且信箱需為 Gmail")
             else:
-                # 檢查是否重複
                 row_num, _ = find_user_row(reg_email)
                 if row_num:
                     st.error("此信箱已註冊，請直接登入")
@@ -267,7 +252,6 @@ user = st.session_state.user
 role = user["role"]
 raw = user.get("raw_data", {})
 
-# 導覽
 nav_options = ["第一階段｜合約"]
 if role == "login":
     nav_options.append("第二階段｜啟動前確認")
@@ -280,11 +264,9 @@ st.markdown("---")
 if nav == "第一階段｜合約":
     st.header(f"第一階段 ({'檢視模式' if role == 'login' else '建檔模式'})")
     
-    # 預設值
     def get_val(k, default):
         return raw.get(k, default) if role == "login" else default
 
-    # 表單
     c1, c2 = st.columns(2)
     with c1:
         party_name = st.text_input("客戶名稱", value=user["name"], disabled=True)
@@ -300,7 +282,6 @@ if nav == "第一階段｜合約":
     
     plan = st.radio("方案", plan_opts, index=plan_idx, disabled=(role=="login"))
     
-    # 日期處理
     d_start = datetime.now().date() + timedelta(days=7)
     if role == "login" and raw.get("start_date"):
         try:
@@ -311,7 +292,6 @@ if nav == "第一階段｜合約":
     
     pay_day = 5
     pay_date = None
-    
     if "每月" in plan:
         pd_val = int(raw.get("pay_day", 5)) if role == "login" else 5
         pay_day = st.slider("付款日", 1, 28, pd_val, disabled=(role=="login"))
@@ -323,10 +303,8 @@ if nav == "第一階段｜合約":
             except: pass
         pay_date = st.date_input("付款日期", value=d_pay, disabled=(role=="login"))
 
-    # 建檔按鈕
     if role == "new":
         if st.button("生成案件並存檔", type="primary"):
-            # 生成案件號
             date_str = datetime.now().strftime("%Y%m%d")
             safe_name = "".join([c for c in user["name"] if c.isalnum()]).strip()
             case_id = f"{safe_name}_{date_str}"
@@ -338,16 +316,13 @@ if nav == "第一階段｜合約":
             
             try:
                 save_phase1_new(data_to_save)
-                # 寄信
                 body = f"新客戶建檔完成：\n名稱：{user['name']}\n案件號：{case_id}\n方案：{plan}"
                 send_email(f"【新案件】{user['name']} 已建檔", body)
-                
                 st.success(f"建檔成功！案件號：{case_id}")
                 st.info("請重新登入以進入第二階段")
             except Exception as e:
                 st.error(f"存檔失敗: {e}")
 
-    # 下載按鈕 (Login 狀態下)
     if role == "login":
         st.info(f"案件號：{raw.get('case_id')}")
         if st.button("下載合約 Word"):
@@ -364,10 +339,10 @@ elif nav == "第二階段｜啟動前確認":
     st.header("第二階段｜啟動資料")
     st.caption("填寫完畢請按下方「更新資料」")
     
-    # 讀取現有值 (轉換 TRUE/FALSE 字串為布林)
     def b(k): return str(raw.get(k, "FALSE")).upper() == "TRUE"
     def s(k): return raw.get(k, "")
 
+    # 第一列確認事項
     c1, c2 = st.columns(2)
     with c1:
         ad = st.checkbox("廣告帳號 OK", value=b("chk_ad_account"))
@@ -376,14 +351,25 @@ elif nav == "第二階段｜啟動前確認":
         fp = st.checkbox("粉專 OK", value=b("chk_fanpage"))
         bm = st.checkbox("BM OK", value=b("chk_bm"))
 
-    # 新增的欄位：遠端桌面
-    rem = st.checkbox("遠端桌面設定 OK", value=b("chk_remote"))
-    st.caption(f"教學：{REMOTE_SUPPORT_URL}")
+    st.markdown("---")
+    # 遠端 與 素材 (特殊項目)
+    c3, c4 = st.columns(2)
+    with c3:
+        st.markdown("**1. 遠端設定**")
+        rem = st.checkbox("遠端桌面設定 OK", value=b("chk_remote"))
+        st.caption(f"[教學連結]({REMOTE_SUPPORT_URL})")
+    
+    with c4:
+        st.markdown("**2. 素材上傳**")
+        # NEW: 素材上傳 checkbox
+        creatives_done = st.checkbox("已前往上傳素材", value=b("chk_creatives"))
+        st.caption(f"[點擊前往上傳系統]({CREATIVES_UPLOAD_URL})")
 
+    st.markdown("---")
+    
     fp_url = st.text_input("粉專連結", value=s("fanpage_url"))
     ld_url = st.text_input("導向頁連結", value=s("landing_url"))
     
-    st.markdown("---")
     st.markdown("### 競品")
     cp1 = st.text_input("競品1", value=s("comp1"))
     cp2 = st.text_input("競品2", value=s("comp2"))
@@ -399,6 +385,7 @@ elif nav == "第二階段｜啟動前確認":
         p2_payload = {
             "chk_ad_account": ad, "chk_pixel": px, "chk_fanpage": fp, "chk_bm": bm,
             "chk_remote": rem,
+            "chk_creatives": creatives_done, # NEW
             "fanpage_url": fp_url, "landing_url": ld_url,
             "comp1": cp1, "comp2": cp2, "comp3": cp3,
             "who_problem": who, "what_problem": what, "how_solve": how,
@@ -408,18 +395,17 @@ elif nav == "第二階段｜啟動前確認":
         try:
             update_phase2(user["row_num"], p2_payload)
             
-            # 寄信
             body = f"""客戶 {user['name']} 更新了第二階段資料：
 - 案件號：{raw.get('case_id')}
 - 遠端桌面：{'OK' if rem else '未完成'}
+- 素材上傳：{'OK' if creatives_done else '未完成'}
 - 粉專連結：{fp_url}
 - 預算：{bud}
+
 詳細內容請見 Google Sheet。
 """
             send_email(f"【更新】{user['name']} 第二階段資料", body)
             st.success("更新成功！已發送通知。")
-            
-            # 重新載入頁面以更新 session state
             st.rerun()
             
         except Exception as e:
