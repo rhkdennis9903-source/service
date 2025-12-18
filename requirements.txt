@@ -1,4 +1,5 @@
 streamlit
-reportlab
-requests
 python-docx
+gspread
+oauth2client
+pandas
