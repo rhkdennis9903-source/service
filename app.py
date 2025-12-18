@@ -3,10 +3,16 @@ import sys
 import os
 # Fix for Streamlit Cloud path resolution
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from services.google_sheet import get_sheet_service
-from services.email_service import send_update_notification
-from views.stage1 import render_stage1
-from views.stage2 import render_stage2
+try:
+    from services.google_sheet import get_sheet_service
+    from services.email_service import send_update_notification
+    from views.stage1 import render_stage1
+    from views.stage2 import render_stage2
+except Exception as e:
+    import traceback
+    st.error(f"Startup Error: {e}")
+    st.code(traceback.format_exc())
+    st.stop()
 import time
 st.set_page_config(
     page_title="廣告投放服務系統",
