@@ -21,9 +21,7 @@ BANK_CODE = "822"
 ACCOUNT_NUMBER = "783540208870"
 REMOTE_SUPPORT_URL = "https://remotedesktop.google.com/support10"
 CREATIVES_UPLOAD_URL = "https://metaads-dtwbm3ntmprhjvpv6ptmec.streamlit.app/" 
-
-# 【新增】教學影片連結 (若為空字串 "" 則不會顯示)
-BM_TUTORIAL_URL = "https://youtu.be/caoZAO8tyNs" 
+BM_TUTORIAL_URL = "https://www.youtube.com/watch?v=你的影片ID" 
 
 st.set_page_config(page_title="廣告投放服務系統", page_icon="📝", layout="centered")
 
@@ -66,6 +64,11 @@ def send_email(subject, body):
 # =========================================================
 # 2) 核心邏輯：資料映射 (Mapping)
 # =========================================================
+# 欄位對應說明 (0-based index from gspread records / 1-based for update_cells)
+# ...原有欄位...
+# 26 (AA): chk_creatives
+# 27 (AB): password (NEW)
+
 def find_user_row(email):
     """回傳 (row_index, row_data_dict) 或 (None, None)"""
     ws = get_worksheet()
@@ -80,6 +83,9 @@ def save_phase1_new(data_dict):
     ws = get_worksheet()
     def s(key): return data_dict.get(key, "")
     
+    # 預設密碼設為 "dennis"
+    default_password = "dennis"
+
     row = [
         s("Email"), s("case_id"), s("party_a"), PROVIDER_NAME, s("plan"), 
         str(s("start_date")), s("pay_day"), str(s("pay_date")) if s("pay_date") else "",
@@ -90,7 +96,8 @@ def save_phase1_new(data_dict):
         s("plan"), # plan_raw
         f"{s('case_id')} ({s('party_a')})", # display_label
         "FALSE", # chk_remote (Z欄)
-        "FALSE"  # chk_creatives (AA欄)
+        "FALSE", # chk_creatives (AA欄)
+        default_password # password (AB欄) - NEW
     ]
     ws.append_row(row)
 
@@ -128,6 +135,12 @@ def update_phase2(row_num, p2_data):
     cells.append(Cell(27, p2_data["chk_creatives"]))
 
     ws.update_cells(cells)
+
+def update_password(row_num, new_password):
+    """更新密碼 (AB欄: 28)"""
+    ws = get_worksheet()
+    # update_cell 是 (row, col)
+    ws.update_cell(row_num, 28, new_password)
 
 # =========================================================
 # 3) Word 生成
@@ -207,8 +220,9 @@ with st.sidebar:
             else:
                 row_num, _ = find_user_row(reg_email)
                 if row_num:
-                    st.error("此信箱已註冊，請直接登入")
+                    st.error("此信箱已註冊，請直接登入 (預設密碼: dennis)")
                 else:
+                    # 建檔時，密碼會自動設為 dennis (在 save_phase1_new 裡)
                     st.session_state.user = {"email": reg_email, "name": reg_name, "role": "new"}
                     st.rerun()
 
@@ -216,11 +230,16 @@ with st.sidebar:
         login_email = st.text_input("信箱")
         login_pass = st.text_input("密碼", type="password")
         if st.button("登入"):
-            if login_pass != "dennis":
-                st.error("密碼錯誤")
+            row_num, data = find_user_row(login_email)
+            if not row_num:
+                st.error("找不到此信箱")
             else:
-                row_num, data = find_user_row(login_email)
-                if row_num:
+                # 取得資料庫密碼，若為空則預設為 "dennis"
+                db_pass = str(data.get("password", "")).strip()
+                if not db_pass:
+                    db_pass = "dennis"
+                
+                if login_pass == db_pass:
                     st.session_state.user = {
                         "email": data["Email"], 
                         "name": data["party_a"], 
@@ -231,9 +250,31 @@ with st.sidebar:
                     st.success("登入成功")
                     st.rerun()
                 else:
-                    st.error("找不到資料")
+                    st.error("密碼錯誤")
 
+    # 登入後顯示：使用者資訊 & 修改密碼 & 登出
     if st.session_state.user:
+        st.markdown("---")
+        st.info(f"Hi, {st.session_state.user['name']}")
+        
+        # 【修改密碼區塊】
+        with st.expander("🔑 修改密碼"):
+            st.warning("⚠️ 注意：密碼不會經過加密處理，管理者可見，請勿使用您的高機密常用密碼！")
+            new_pw = st.text_input("新密碼", type="password", key="new_pw_input")
+            if st.button("確認修改"):
+                if len(new_pw) < 4:
+                    st.error("密碼長度請至少 4 碼")
+                else:
+                    # 只有 login 狀態 (有 row_num) 才能改
+                    if st.session_state.user.get("row_num"):
+                        try:
+                            update_password(st.session_state.user["row_num"], new_pw)
+                            st.success("密碼修改成功！下次請用新密碼登入。")
+                        except Exception as e:
+                            st.error(f"修改失敗: {e}")
+                    else:
+                        st.error("新用戶請先完成建檔流程後再修改密碼。")
+
         if st.button("登出"):
             st.session_state.user = None
             st.rerun()
@@ -243,7 +284,7 @@ with st.sidebar:
 # =========================================================
 if not st.session_state.user:
     st.title("📝 廣告服務系統")
-    st.info("👈 請由左側登入或建檔")
+    st.info("👈 請由左側登入或建檔 (預設密碼: dennis)")
     st.stop()
 
 user = st.session_state.user
@@ -317,7 +358,7 @@ if nav == "第一階段｜合約":
                 body = f"新客戶建檔完成：\n名稱：{user['name']}\n案件號：{case_id}\n方案：{plan}"
                 send_email(f"【新案件】{user['name']} 已建檔", body)
                 st.success(f"建檔成功！案件號：{case_id}")
-                st.info("請重新登入以進入第二階段")
+                st.info("請重新登入 (預設密碼: dennis) 以進入第二階段")
             except Exception as e:
                 st.error(f"存檔失敗: {e}")
 
@@ -340,7 +381,7 @@ elif nav == "第二階段｜啟動前確認":
     def b(k): return str(raw.get(k, "FALSE")).upper() == "TRUE"
     def s(k): return raw.get(k, "")
 
-    # 【新增】教學影片區塊 (使用 expander 避免佔空間)
+    # 教學影片
     if BM_TUTORIAL_URL.strip():
         with st.expander("📺 [教學影片] 如何設定企業管理平台 (BM)？"):
             st.video(BM_TUTORIAL_URL)
