@@ -31,7 +31,7 @@ st.set_page_config(
 )
 
 # =========================================================
-# 1) 工具函式：Sheet 連線與資料處理
+# 1) 工具函式
 # =========================================================
 @st.cache_resource
 def get_gsheet_client():
@@ -47,7 +47,6 @@ def get_worksheet():
     return sheet.get_worksheet(0)
 
 def send_email(subject, body):
-    """寄送通知信給管理員"""
     try:
         sender = st.secrets["email"]["sender_email"]
         password = st.secrets["email"]["sender_password"]
@@ -58,20 +57,18 @@ def send_email(subject, body):
         msg['From'] = sender
         msg['To'] = receiver
 
-        # 使用 SSL 連線 (Port 465)
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender, password)
             server.send_message(msg)
         return True
     except Exception as e:
-        st.error(f"Email 發送失敗 (請截圖給管理員): {e}")
+        st.error(f"Email 發送失敗: {e}")
         return False
 
 # =========================================================
-# 2) 核心邏輯：資料映射 (Mapping)
+# 2) 資料處理邏輯
 # =========================================================
 def find_user_row(email):
-    """回傳 (row_index, row_data_dict) 或 (None, None)"""
     ws = get_worksheet()
     records = ws.get_all_records()
     for i, record in enumerate(records):
@@ -80,31 +77,22 @@ def find_user_row(email):
     return None, None
 
 def save_phase1_new(data_dict):
-    """建檔：新增一列"""
     ws = get_worksheet()
     def s(key): return data_dict.get(key, "")
-    
     default_password = "dennis"
-
     row = [
         s("Email"), s("case_id"), s("party_a"), PROVIDER_NAME, s("plan"), 
         str(s("start_date")), s("pay_day"), str(s("pay_date")) if s("pay_date") else "",
-        "FALSE", "FALSE", "FALSE", "FALSE", # chk boxes init
-        "", "", "", "", "", "", "", "", "", # Phase 2 strings init
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), # last_update_at
-        "contract", # msg_type
-        s("plan"), # plan_raw
-        f"{s('case_id')} ({s('party_a')})", # display_label
-        "FALSE", # chk_remote
-        "FALSE", # chk_creatives
-        default_password # password
+        "FALSE", "FALSE", "FALSE", "FALSE", 
+        "", "", "", "", "", "", "", "", "", 
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), 
+        "contract", s("plan"), f"{s('case_id')} ({s('party_a')})", 
+        "FALSE", "FALSE", default_password
     ]
     ws.append_row(row)
 
 def update_phase2(row_num, p2_data):
-    """更新：修改指定列的 Phase 2 欄位"""
     ws = get_worksheet()
-    
     cells = []
     def Cell(col, val): return gspread.Cell(row_num, col, str(val))
 
@@ -112,7 +100,6 @@ def update_phase2(row_num, p2_data):
     cells.append(Cell(10, p2_data["chk_pixel"]))
     cells.append(Cell(11, p2_data["chk_fanpage"]))
     cells.append(Cell(12, p2_data["chk_bm"]))
-    
     cells.append(Cell(13, p2_data["fanpage_url"]))
     cells.append(Cell(14, p2_data["landing_url"]))
     cells.append(Cell(15, p2_data["comp1"]))
@@ -122,7 +109,6 @@ def update_phase2(row_num, p2_data):
     cells.append(Cell(19, p2_data["what_problem"]))
     cells.append(Cell(20, p2_data["how_solve"]))
     cells.append(Cell(21, p2_data["budget"]))
-    
     cells.append(Cell(22, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
     cells.append(Cell(26, p2_data["chk_remote"]))
     cells.append(Cell(27, p2_data["chk_creatives"]))
@@ -130,12 +116,11 @@ def update_phase2(row_num, p2_data):
     ws.update_cells(cells)
 
 def update_password(row_num, new_password):
-    """更新密碼"""
     ws = get_worksheet()
     ws.update_cell(row_num, 28, new_password)
 
 # =========================================================
-# 3) Word 生成 (詳細版內容 + 窄邊界優化)
+# 3) Word 生成 (排版優化)
 # =========================================================
 def set_run_font(run, size=10.5, bold=False):
     run.font.name = "Microsoft JhengHei"
@@ -145,19 +130,15 @@ def set_run_font(run, size=10.5, bold=False):
 
 def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, case_num):
     doc = Document()
-    
-    # 版面設定：窄邊界
     section = doc.sections[0]
     section.top_margin = Cm(1.27)
     section.bottom_margin = Cm(1.27)
     section.left_margin = Cm(1.27)
     section.right_margin = Cm(1.27)
-
     style = doc.styles['Normal']
     style.paragraph_format.line_spacing = 1.15
     style.paragraph_format.space_after = Pt(2)
 
-    # --- 標題 ---
     heading = doc.add_paragraph()
     heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = heading.add_run("廣告投放服務合約書")
@@ -170,7 +151,6 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
         set_run_font(run_sub, size=9)
     doc.add_paragraph("")
 
-    # --- 變數邏輯 ---
     if payment_opt == "17,000元/月（每月付款）":
         end_dt = start_dt + timedelta(days=30)
         period_text = (
@@ -196,7 +176,6 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
             "惟因乙方重大違約致服務無法履行者，不在此限。"
         )
 
-    # --- 立約人 ---
     p = doc.add_paragraph()
     run = p.add_run(f"甲方（委託暨付款方）：{party_a}\n")
     set_run_font(run, bold=True)
@@ -218,9 +197,7 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
                 run_item = p_item.add_run(content)
                 set_run_font(run_item)
 
-    # --- 條款 ---
     add_clause("第一條　合約期間", [period_text])
-
     p = doc.add_paragraph()
     run = p.add_run("第二條　服務內容")
     set_run_font(run, bold=True)
@@ -237,7 +214,6 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
         p = doc.add_paragraph(item)
         p.paragraph_format.left_indent = Cm(1.5)
         set_run_font(p.runs[0])
-
     p = doc.add_paragraph()
     p.paragraph_format.left_indent = Cm(0.75)
     run = p.add_run("二、非固定工作項目（視實際狀況提供）")
@@ -250,7 +226,6 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
         p = doc.add_paragraph(item)
         p.paragraph_format.left_indent = Cm(1.5)
         set_run_font(p.runs[0])
-
     add_clause("第三條　服務範圍與限制", [
         "1. 本服務範圍以 Meta（Facebook／Instagram）廣告投放為主；若需擴展至其他平台，雙方另行協議。",
         "2. 廣告投放預算由甲方自行支付予廣告平台，不包含於本合約服務費用內。",
@@ -262,17 +237,13 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
         "2. 若因平台政策、帳號狀況或其他不可控因素需採替代作業方式（例如：由甲方匯出報表供乙方監控），甲方同意合理配合。"
     ])
     add_clause("第五條　費用與付款方式", [
-        price_text,
-        pay_time_text,
-        first_pay_text,
+        price_text, pay_time_text, first_pay_text,
         "4. 逾期付款者，乙方得暫停服務至款項付清為止；因此造成之廣告中斷或成效波動，乙方不負賠償責任。"
     ])
-    
     p = doc.add_paragraph()
     p.paragraph_format.left_indent = Cm(1.5)
     run = p.add_run(f"乙方指定收款帳戶：\n銀行：{BANK_NAME}（{BANK_CODE}）\n帳號：{ACCOUNT_NUMBER}")
     set_run_font(run)
-
     add_clause("第六條　付款方式與稅務責任", [
         "1. 乙方為自然人，依法無須開立統一發票。",
         "2. 本合約費用之付款方式、帳務處理及相關稅務申報，均由甲方依其自身狀況及相關法令自行決定並負責。",
@@ -309,7 +280,6 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
     p = c1.paragraphs[0]
     run = p.add_run(f"甲方（委託暨付款方）：\n{party_a}\n信箱：{email}\n\n簽名：___________________\n\n日期：_____ 年 ___ 月 ___ 日")
     set_run_font(run)
-
     c2 = table.cell(0, 1)
     p = c2.paragraphs[0]
     run = p.add_run(f"乙方（服務執行者）：\n{PROVIDER_NAME}\n\n簽名：___________________\n\n日期：_____ 年 ___ 月 ___ 日")
@@ -326,7 +296,7 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
 if "user" not in st.session_state:
     st.session_state.user = None 
 
-# 用於顯示成功訊息的 Flag
+# 用於顯示成功訊息的變數
 if "phase1_success_msg" not in st.session_state:
     st.session_state.phase1_success_msg = None
 if "phase2_success_msg" not in st.session_state:
@@ -423,6 +393,13 @@ nav_options = ["第一階段｜合約"]
 if role == "login":
     nav_options.append("第二階段｜啟動前確認")
 nav = st.radio("流程：", nav_options, horizontal=True)
+
+# 切換頁面時，清除另一邊的成功訊息，避免混淆
+if nav == "第一階段｜合約":
+    st.session_state.phase2_success_msg = None
+else:
+    st.session_state.phase1_success_msg = None
+
 st.markdown("---")
 
 # -----------------
@@ -431,12 +408,6 @@ st.markdown("---")
 if nav == "第一階段｜合約":
     st.header(f"第一階段 ({'檢視模式' if role == 'login' else '建檔模式'})")
     
-    # 成功訊息顯示區 (保留供客戶複製)
-    if st.session_state.phase1_success_msg:
-        st.success("✅ 建檔成功！請複製以下訊息：")
-        st.code(st.session_state.phase1_success_msg)
-        st.markdown("---")
-
     st.info("""
     💡 **第一階段操作流程**：
     1. **詳閱服務內容**：確認雙方權利義務與工作範圍。
@@ -546,6 +517,13 @@ if nav == "第一階段｜合約":
 
                 except Exception as e:
                     st.error(f"存檔失敗: {e}")
+        
+        # [第一階段] 成功訊息顯示區 (按鈕下方)
+        if st.session_state.phase1_success_msg:
+            st.success("✅ 建檔成功！請複製以下訊息傳 LINE 給我：")
+            st.code(st.session_state.phase1_success_msg)
+            st.balloons()
+
 
     if role == "login":
         st.info(f"案件編號：{raw.get('case_id')}")
@@ -562,14 +540,6 @@ if nav == "第一階段｜合約":
 elif nav == "第二階段｜啟動前確認":
     st.header("第二階段｜啟動資料")
     
-    # 成功訊息顯示區
-    if st.session_state.phase2_success_msg:
-        st.success("✅ 更新成功！請複製以下訊息回傳：")
-        st.code(st.session_state.phase2_success_msg)
-        st.balloons()
-        # 清除訊息以免下次進來還在，但因為是 rerun 後顯示，這次會留著
-        st.session_state.phase2_success_msg = None 
-
     st.info("""
     💡 **第二階段操作流程**：
     1. **確認基本資料**：確保上方案件編號與信箱正確。
@@ -674,3 +644,9 @@ elif nav == "第二階段｜啟動前確認":
                 
             except Exception as e:
                 st.error(f"更新失敗: {e}")
+    
+    # [第二階段] 成功訊息顯示區 (按鈕下方)
+    if st.session_state.phase2_success_msg:
+        st.success("✅ 更新成功！請複製以下訊息回傳 LINE：")
+        st.code(st.session_state.phase2_success_msg)
+        st.balloons()
