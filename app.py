@@ -58,12 +58,13 @@ def send_email(subject, body):
         msg['From'] = sender
         msg['To'] = receiver
 
+        # 使用 SSL 連線 (Port 465)
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender, password)
             server.send_message(msg)
         return True
     except Exception as e:
-        print(f"Email Error: {e}")
+        st.error(f"Email 發送失敗 (請截圖給管理員): {e}")
         return False
 
 # =========================================================
@@ -137,7 +138,6 @@ def update_password(row_num, new_password):
 # 3) Word 生成 (詳細版內容 + 窄邊界優化)
 # =========================================================
 def set_run_font(run, size=10.5, bold=False):
-    """設定中文字型，預設 10.5pt (約五號字) 以容納詳細內容"""
     run.font.name = "Microsoft JhengHei"
     run.font.size = Pt(size)
     run.bold = bold
@@ -146,16 +146,15 @@ def set_run_font(run, size=10.5, bold=False):
 def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, case_num):
     doc = Document()
     
-    # 版面設定：窄邊界 (1.27cm)
+    # 版面設定：窄邊界
     section = doc.sections[0]
     section.top_margin = Cm(1.27)
     section.bottom_margin = Cm(1.27)
     section.left_margin = Cm(1.27)
     section.right_margin = Cm(1.27)
 
-    # 全域樣式
     style = doc.styles['Normal']
-    style.paragraph_format.line_spacing = 1.15 # 稍微緊湊一點
+    style.paragraph_format.line_spacing = 1.15
     style.paragraph_format.space_after = Pt(2)
 
     # --- 標題 ---
@@ -171,7 +170,7 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
         set_run_font(run_sub, size=9)
     doc.add_paragraph("")
 
-    # --- 變數邏輯 (還原詳細文字) ---
+    # --- 變數邏輯 ---
     if payment_opt == "17,000元/月（每月付款）":
         end_dt = start_dt + timedelta(days=30)
         period_text = (
@@ -219,10 +218,9 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
                 run_item = p_item.add_run(content)
                 set_run_font(run_item)
 
-    # --- 詳細條款還原 ---
+    # --- 條款 ---
     add_clause("第一條　合約期間", [period_text])
 
-    # 第二條：服務內容
     p = doc.add_paragraph()
     run = p.add_run("第二條　服務內容")
     set_run_font(run, bold=True)
@@ -253,7 +251,6 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
         p.paragraph_format.left_indent = Cm(1.5)
         set_run_font(p.runs[0])
 
-    # 第三～十四條
     add_clause("第三條　服務範圍與限制", [
         "1. 本服務範圍以 Meta（Facebook／Instagram）廣告投放為主；若需擴展至其他平台，雙方另行協議。",
         "2. 廣告投放預算由甲方自行支付予廣告平台，不包含於本合約服務費用內。",
@@ -306,8 +303,6 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
     add_clause("第十四條　爭議處理", ["本合約之解釋與適用，以中華民國法律為準據法。雙方如有爭議，應先行協商；協商不成以臺灣臺北地方法院為第一審管轄法院。"])
 
     doc.add_paragraph("")
-    
-    # --- 簽名欄 (表格固定) ---
     table = doc.add_table(rows=1, cols=2)
     table.autofit = False
     c1 = table.cell(0, 0)
@@ -331,11 +326,16 @@ def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, 
 if "user" not in st.session_state:
     st.session_state.user = None 
 
+# 用於顯示成功訊息的 Flag
+if "phase1_success_msg" not in st.session_state:
+    st.session_state.phase1_success_msg = None
+if "phase2_success_msg" not in st.session_state:
+    st.session_state.phase2_success_msg = None
+
 with st.sidebar:
     st.title("系統入口")
 
     if st.session_state.user:
-        # 已登入
         st.success(f"🟢 已登入：{st.session_state.user['name']}")
         
         with st.expander("🔑 修改密碼"):
@@ -356,7 +356,6 @@ with st.sidebar:
             st.rerun()
 
     else:
-        # 未登入
         mode = st.radio("模式", ["客戶登入", "新客戶建檔"])
         st.markdown("---")
 
@@ -416,7 +415,6 @@ user = st.session_state.user
 role = user["role"]
 raw = user.get("raw_data", {})
 
-# 頂部資訊
 st.title("📝 廣告投放服務系統")
 st.markdown(f"**目前使用者：{user['name']} ({user['email']})**")
 st.markdown("---")
@@ -433,9 +431,12 @@ st.markdown("---")
 if nav == "第一階段｜合約":
     st.header(f"第一階段 ({'檢視模式' if role == 'login' else '建檔模式'})")
     
-    # ------------------
-    # 還原：服務內容說明
-    # ------------------
+    # 成功訊息顯示區 (保留供客戶複製)
+    if st.session_state.phase1_success_msg:
+        st.success("✅ 建檔成功！請複製以下訊息：")
+        st.code(st.session_state.phase1_success_msg)
+        st.markdown("---")
+
     st.info("""
     💡 **第一階段操作流程**：
     1. **詳閱服務內容**：確認雙方權利義務與工作範圍。
@@ -470,9 +471,7 @@ if nav == "第一階段｜合約":
     st.warning("📌 稅務提醒：乙方為自然人，無須開立發票。甲方自行處理勞報或相關稅務。")
     st.markdown("---")
 
-    # ------------------
     # 表單區
-    # ------------------
     def get_val(k, default):
         return raw.get(k, default) if role == "login" else default
 
@@ -517,23 +516,36 @@ if nav == "第一階段｜合約":
     # 生成按鈕
     if role == "new":
         if st.button("🎲 生成案件編號並存檔", type="primary"):
-            date_str = datetime.now().strftime("%Y%m%d")
-            safe_name = "".join([c for c in user["name"] if c.isalnum()]).strip()
-            case_id = f"{safe_name}_{date_str}"
-            
-            data_to_save = {
-                "Email": user["email"], "case_id": case_id, "party_a": user["name"],
-                "plan": plan, "start_date": start_date, "pay_day": pay_day, "pay_date": pay_date
-            }
-            
-            try:
-                save_phase1_new(data_to_save)
-                body = f"新客戶建檔完成：\n名稱：{user['name']}\n案件號：{case_id}\n方案：{plan}"
-                send_email(f"【新案件】{user['name']} 已建檔", body)
-                st.success(f"建檔成功！案件號：{case_id}")
-                st.info("請重新登入 (預設密碼: dennis) 以進入第二階段")
-            except Exception as e:
-                st.error(f"存檔失敗: {e}")
+            with st.spinner("資料建立中，並同步發送通知信..."):
+                date_str = datetime.now().strftime("%Y%m%d")
+                safe_name = "".join([c for c in user["name"] if c.isalnum()]).strip()
+                case_id = f"{safe_name}_{date_str}"
+                
+                data_to_save = {
+                    "Email": user["email"], "case_id": case_id, "party_a": user["name"],
+                    "plan": plan, "start_date": start_date, "pay_day": pay_day, "pay_date": pay_date
+                }
+                
+                try:
+                    save_phase1_new(data_to_save)
+                    
+                    # 寄信
+                    body_email = f"新客戶建檔完成：\n名稱：{user['name']}\n案件號：{case_id}\n方案：{plan}"
+                    send_email(f"【新案件】{user['name']} 已建檔", body_email)
+                    
+                    # 準備 LINE 訊息 (放入 Session)
+                    msg_line = f"""【合約確認】
+案件編號：{case_id}
+甲方：{user['name']}
+信箱：{user['email']}
+乙方：{PROVIDER_NAME}
+方案：{plan}
+啟動：{start_date}"""
+                    st.session_state.phase1_success_msg = msg_line
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"存檔失敗: {e}")
 
     if role == "login":
         st.info(f"案件編號：{raw.get('case_id')}")
@@ -550,9 +562,14 @@ if nav == "第一階段｜合約":
 elif nav == "第二階段｜啟動前確認":
     st.header("第二階段｜啟動資料")
     
-    # ------------------
-    # 還原：服務說明
-    # ------------------
+    # 成功訊息顯示區
+    if st.session_state.phase2_success_msg:
+        st.success("✅ 更新成功！請複製以下訊息回傳：")
+        st.code(st.session_state.phase2_success_msg)
+        st.balloons()
+        # 清除訊息以免下次進來還在，但因為是 rerun 後顯示，這次會留著
+        st.session_state.phase2_success_msg = None 
+
     st.info("""
     💡 **第二階段操作流程**：
     1. **確認基本資料**：確保上方案件編號與信箱正確。
@@ -568,12 +585,6 @@ elif nav == "第二階段｜啟動前確認":
     3) **效率**：遠端前我會準備好，操作會非常快。
     """)
     
-    # 檢查是否需要顯示成功訊息 (Flag Check)
-    if st.session_state.get("show_update_success"):
-        st.success("✅ 資料更新成功！已發送通知給高如慧。")
-        st.balloons()
-        st.session_state["show_update_success"] = False # 重置 Flag
-
     def b(k): return str(raw.get(k, "FALSE")).upper() == "TRUE"
     def s(k): return raw.get(k, "")
 
@@ -623,7 +634,7 @@ elif nav == "第二階段｜啟動前確認":
     bud = st.text_input("第一個月預算", value=s("budget"))
     
     if st.button("💾 更新資料並通知", type="primary"):
-        with st.spinner("⏳ 資料同步中，請稍候..."):
+        with st.spinner("⏳ 資料同步中，並發送 Email 通知信..."):
             p2_payload = {
                 "chk_ad_account": ad, "chk_pixel": px, "chk_fanpage": fp, "chk_bm": bm,
                 "chk_remote": rem,
@@ -637,7 +648,7 @@ elif nav == "第二階段｜啟動前確認":
             try:
                 update_phase2(user["row_num"], p2_payload)
                 
-                body = f"""客戶 {user['name']} 更新了第二階段資料：
+                body_email = f"""客戶 {user['name']} 更新了第二階段資料：
 - 案件號：{raw.get('case_id')}
 - 遠端桌面：{'OK' if rem else '未完成'}
 - 素材上傳：{'OK' if creatives_done else '未完成'}
@@ -646,12 +657,19 @@ elif nav == "第二階段｜啟動前確認":
 
 詳細內容請見 Google Sheet。
 """
-                send_email(f"【更新】{user['name']} 第二階段資料", body)
+                send_email(f"【更新】{user['name']} 第二階段資料", body_email)
                 
-                # 設定成功 Flag 並重整，確保資料最新且訊息可見
-                st.session_state["show_update_success"] = True
-                st.toast("資料已存檔！")
-                time.sleep(1) # 讓 toast 顯示一下
+                # 準備 LINE 訊息 (放入 Session)
+                msg_line = f"""【資料更新】
+案件編號：{raw.get('case_id')}
+信箱：{user['email']}
+--
+遠端桌面：{'OK' if rem else '未完成'}
+素材上傳：{'OK' if creatives_done else '未完成'}
+粉專網址：{fp_url}
+預算：{bud}
+"""
+                st.session_state.phase2_success_msg = msg_line
                 st.rerun()
                 
             except Exception as e:
