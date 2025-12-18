@@ -47,15 +47,12 @@ def render_stage1(client_name, client_email):
     st.text_input("甲方名稱", value=client_name, disabled=True)
     st.text_input("甲方信箱", value=client_email, disabled=True)
 
-    # Temporary Case Number for Preview? Or Generate one now?
-    # User said: "Complete... after generate case number".
-    # But contract needs it. Let's generate a draft one or just generate it now.
-    # We'll use the same logic: Name_Date
+    # Generate Case ID
     date_str = datetime.now().strftime("%Y%m%d_%H%M")
     safe_name = "".join([c for c in client_name if c.isalnum() or c in (" ", "_", "-")]).strip()
-    case_number = f"{safe_name}_{date_str}"
+    case_id = f"{safe_name}_{date_str}"
     
-    st.caption(f"預計案件編號：{case_number}")
+    st.caption(f"預計案件編號：{case_id}")
 
     st.markdown("---")
     
@@ -67,7 +64,7 @@ def render_stage1(client_name, client_email):
             start_dt=start_date,
             pay_day=payment_day,
             pay_dt=payment_date,
-            case_num=case_number,
+            case_num=case_id,
             provider_name=PROVIDER_NAME,
             bank_name=BANK_NAME,
             bank_code=BANK_CODE,
@@ -76,15 +73,18 @@ def render_stage1(client_name, client_email):
         
         # Save to session state for download
         st.session_state['stage1_docx'] = docx_bytes
+        
+        # Data preparation matching Google Sheet Columns
         st.session_state['stage1_data'] = {
-            "CaseNumber": case_number,
-            "ClientName": client_name,
-            "ClientEmail": client_email,
-            "PaymentOption": payment_option,
-            "StartDate": str(start_date),
-            "PaymentDay": str(payment_day) if payment_day else "",
-            "PaymentDate": str(payment_date) if payment_date else "",
-            "ContractGenerated": True,
+            "case_id": case_id,
+            "party_a": client_name,
+            "Email": client_email,
+            "provider": PROVIDER_NAME,
+            "plan": payment_option,
+            "plan_raw": payment_option,
+            "start_date": str(start_date),
+            "pay_day": str(payment_day) if payment_day else "",
+            "pay_date": str(payment_date) if payment_date else "",
             "Status": "Stage1_Done"
         }
         st.success("合約已生成，請確認下方資訊並提交。")
@@ -93,7 +93,7 @@ def render_stage1(client_name, client_email):
         st.download_button(
             label="⬇️ 下載 Word 合約 (.docx)",
             data=st.session_state['stage1_docx'],
-            file_name=f"廣告投放合約_{case_number}.docx",
+            file_name=f"廣告投放合約_{case_id}.docx",
             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
         

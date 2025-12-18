@@ -26,14 +26,16 @@ def main():
         
         # If logged in, show user info and logout
         if st.session_state['user_data']:
-            st.success(f"Hi, {st.session_state['user_data'].get('ClientName')}")
+            # Use safe get just in case
+            name = st.session_state['user_data'].get('party_a') or st.session_state['user_data'].get('ClientName')
+            st.success(f"Hi, {name}")
             if st.button("登出"):
                 st.session_state['user_data'] = None
                 st.session_state['auth_mode'] = None
                 st.rerun()
         else:
-            mode = st.radio("請選擇功能", ["建檔 (Register)", "登入 (Login)"])
-            if mode == "建檔 (Register)":
+            mode = st.radio("請選擇功能", ["建檔 (New Registration)", "登入 (Login)"])
+            if "建檔" in mode:
                 st.session_state['auth_mode'] = 'register'
             else:
                 st.session_state['auth_mode'] = 'login'
@@ -47,26 +49,20 @@ def main():
     else:
         # User is logged in
         user = st.session_state['user_data']
-        # Check status to determine view? 
-        # Requirement: 
-        # If Registering (New) -> Stage 1.
-        # If Login (Existing) -> Stage 2 (with Stage 1 Readonly).
         
-        # We can distinguish by "Stage1_Done" status or just the flow they came from.
-        # However, if a user Registers, finishes Stage 1, logs out, and logs back in, they should see Stage 2.
-        # So we check data completeness.
-        
-        if user.get("Status") == "Stage1_Done" or user.get("Status") == "Stage2_Done":
-             # Existing user or just finished stage 1
+        # Check status to determine view
+        # We check keys for Stage 1 completion
+        if user.get("Status") == "Stage1_Done" or user.get("Status") == "Stage2_Done" or user.get("case_id"):
+             # Existing user with Case ID means Stage 1 is largely done
              handle_stage2_flow(user)
         else:
-             # Fresh user (just registered name/email but hasn't finished Stage 1)
+             # Fresh user
              handle_stage1_flow(user)
 
 def handle_register():
     st.subheader("🆕 客戶建檔")
     with st.form("register_form"):
-        name = st.text_input("客戶名稱")
+        name = st.text_input("客戶名稱 (Client Name)")
         email = st.text_input("聯絡信箱 (Google Email)")
         submitted = st.form_submit_button("開始建檔")
         
@@ -85,8 +81,8 @@ def handle_register():
             else:
                 # Set session state as "New User"
                 st.session_state['user_data'] = {
-                    "ClientName": name,
-                    "ClientEmail": email,
+                    "party_a": name,
+                    "Email": email,
                     "Status": "New"
                 }
                 st.rerun()
@@ -94,7 +90,7 @@ def handle_register():
 def handle_login():
     st.subheader("🔑 客戶登入")
     with st.form("login_form"):
-        email = st.text_input("聯絡信箱")
+        email = st.text_input("聯絡信箱 (Google Email)")
         password = st.text_input("密碼", type="password")
         submitted = st.form_submit_button("登入")
         
@@ -117,7 +113,7 @@ def handle_login():
 def handle_stage1_flow(user):
     # Render Stage 1 View
     # returns data if submitted
-    results = render_stage1(user['ClientName'], user['ClientEmail'])
+    results = render_stage1(user.get('party_a'), user.get('Email'))
     
     if results:
         # Saving Logic
@@ -132,7 +128,7 @@ def handle_stage1_flow(user):
         success = sheet.create_or_update_user(user)
         
         if success:
-            send_update_notification(user['ClientName'], "第一階段｜合約", f"案件號：{user['CaseNumber']}")
+            send_update_notification(user.get('party_a'), "第一階段｜合約", f"案件號：{user.get('case_id')}")
             status_msg.success("資料已儲存！已通知服務方。")
             # Update session state status
             st.session_state['user_data'] = user
@@ -143,11 +139,6 @@ def handle_stage1_flow(user):
 
 def handle_stage2_flow(user):
     # Render Stage 2 View
-    # Pass current user data
-    
-    # Check if user wants to see Stage 1 again? 
-    # Logic: Show Stage 2 mainly.
-    
     updates = render_stage2(user)
     
     if updates:
@@ -161,7 +152,7 @@ def handle_stage2_flow(user):
         success = sheet.create_or_update_user(user)
         
         if success:
-            send_update_notification(user['ClientName'], "第二階段｜啟動前確認", f"更新欄位：{list(updates.keys())}")
+            send_update_notification(user.get('party_a'), "第二階段｜啟動前確認", f"更新欄位：{list(updates.keys())}")
             status_msg.success("更新成功！")
             st.session_state['user_data'] = user
             time.sleep(1)
