@@ -308,7 +308,9 @@ with st.sidebar:
     if st.session_state.user:
         st.success(f"🟢 已登入：{st.session_state.user['name']}")
         
+        # --- [修正點] 加入安全警示 ---
         with st.expander("🔑 修改密碼"):
+            st.warning("⚠️ **安全提醒**：\n本系統採明碼儲存以便救援，**請絕對不要使用您平常慣用的銀行、Google 或高強度密碼**。\n建議設定一組簡單好記的專用密碼即可 (例如：1234)。")
             new_pw = st.text_input("新密碼", type="password", key="new_pw_input")
             if st.button("確認修改"):
                 if len(new_pw) < 4:
