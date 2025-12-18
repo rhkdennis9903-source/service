@@ -11,6 +11,20 @@ try:
 except Exception as e:
     import traceback
     st.error(f"Startup Error: {e}")
+    st.markdown("### Debug Info")
+    st.text(f"CWD: {os.getcwd()}")
+    st.text(f"Dirname: {os.path.dirname(os.path.abspath(__file__))}")
+    
+    st.markdown("**Files in Dirname:**")
+    try:
+        files = os.listdir(os.path.dirname(os.path.abspath(__file__)))
+        st.write(files)
+    except Exception as e2:
+        st.write(f"Error listing dir: {e2}")
+        
+    st.markdown("**Sys Path:**")
+    st.write(sys.path)
+    
     st.code(traceback.format_exc())
     st.stop()
 import time
