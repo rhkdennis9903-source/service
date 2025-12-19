@@ -133,7 +133,7 @@ def update_password(row_num, new_pw):
     ws.update_cell(row_num, 28, make_hash(new_pw))
 
 # =========================================================
-# 3) Word 合約生成 (精確還原 14 條款)
+# 3) Word 合約生成 (完整 14 條款版)
 # =========================================================
 def set_run_font(run, size=10.5, bold=False):
     run.font.name = "Microsoft JhengHei"
@@ -143,59 +143,129 @@ def set_run_font(run, size=10.5, bold=False):
 
 def generate_docx_bytes(party_a, email, payment_opt, start_dt, pay_day, pay_dt, case_num):
     doc = Document()
+    
+    # 設定頁邊距
     section = doc.sections[0]
-    section.top_margin = Cm(1.27); section.bottom_margin = Cm(1.27)
-    section.left_margin = Cm(1.27); section.right_margin = Cm(1.27)
-    style = doc.styles['Normal']; style.paragraph_format.line_spacing = 1.15
+    section.top_margin = Cm(2.0)
+    section.bottom_margin = Cm(2.0)
+    section.left_margin = Cm(2.5)
+    section.right_margin = Cm(2.5)
+    
+    # 設定預設字體與行距
+    style = doc.styles['Normal']
+    style.paragraph_format.line_spacing = 1.5
+    style.paragraph_format.space_after = Pt(0)
 
-    heading = doc.add_paragraph(); heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = heading.add_run("廣告投放服務合約書"); set_run_font(run, size=16, bold=True)
+    # 1. 標題
+    heading = doc.add_paragraph()
+    heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = heading.add_run("廣告投放服務合約書")
+    set_run_font(run, size=18, bold=True)
+    
     if case_num:
-        sub = doc.add_paragraph(); sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run_sub = sub.add_run(f"案件編號：{case_num}"); set_run_font(run_sub, size=9)
-    doc.add_paragraph("")
+        sub = doc.add_paragraph()
+        sub.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        run_sub = sub.add_run(f"案件編號：{case_num}")
+        set_run_font(run_sub, size=10)
 
+    # 2. 前言
+    doc.add_paragraph("")
+    p_intro = doc.add_paragraph()
+    run_intro = p_intro.add_run(f"立合約書人：委託人 {party_a}（以下簡稱甲方）與服務執行人 {PROVIDER_NAME}（以下簡稱乙方），茲就廣告投放服務事宜，經雙方同意訂立本合約，條款如下：")
+    set_run_font(run_intro, size=11)
+
+    # 定義方案參數
     if payment_opt == "17,000元/月（每月付款）":
         end_dt = start_dt + timedelta(days=30)
-        period = f"自 {start_dt} 起至 {end_dt} 止，共 1 個月。届期自動續行 1 個月，以此類推。"
-        price = "1. 服務費用：新台幣壹萬柒仟元整（NT$17,000）／月。"
-        pay_time = f"2. 付款時間：應於每月 {pay_day} 日前支付。"
-        first_pay = f"3. 首期款項應於合作啟動日（{start_dt}）前支付完成。"
-        refund = "2. 月付方案：已支付之當期費用不予退還。"
+        period_text = f"自 {start_dt} 起至 {end_dt} 止，為期 1 個月。本合約屆滿前若雙方未提出終止要求，則自動續約 1 個月，以此類推。"
+        fee_text = "新台幣壹萬柒仟元整（NT$17,000）／月。"
+        pay_logic = f"應於每月 {pay_day} 日前支付當期費用。"
     else:
         end_dt = start_dt + timedelta(days=90)
-        period = f"自 {start_dt} 起至 {end_dt} 止，共 3 個月。续约應於届滿前 7 日另行協議。"
-        price = "1. 服務費用：新台幣肆萬伍仟元整（NT$45,000）／三個月。"
-        pay_time = f"2. 付款時間：應於 {pay_dt} 前一次支付完成。"
-        first_pay = None
-        refund = "2. 季付方案屬優惠預付，一經支付後即不予退還。"
+        period_text = f"自 {start_dt} 起至 {end_dt} 止，為期 3 個月。續約應於屆滿前 7 日另行協議。"
+        fee_text = "新台幣肆萬伍仟元整（NT$45,000）／三個月。"
+        pay_logic = f"應於 {pay_dt} 前一次性支付全額費用。"
 
-    p = doc.add_paragraph()
-    run = p.add_run(f"甲方（委託暨付款方）：{party_a}  /  乙方（服務執行者）：{PROVIDER_NAME}")
-    set_run_font(run, bold=True)
+    # 3. 完整 14 條款
+    clauses = [
+        ("第一條：合約期間", [period_text]),
+        ("第二條：服務內容", [
+            "1. 廣告策略規劃與上架執行。",
+            "2. 每日監控廣告投放狀況與數據維護。",
+            "3. 提供簡易週報（包含數據摘要與下週優化方向）。",
+            "4. 視需求提供文案與 Landing Page 優化建議。"
+        ]),
+        ("第三條：投放平台與費用", [
+            "1. 本服務以 Meta（Facebook/Instagram）平台為主。",
+            "2. 廣告投放實際消耗之「廣告費」不包含在服務費內，由甲方直接支付予平台方。"
+        ]),
+        ("第四條：甲方配合義務", [
+            "1. 甲方應提供必要之資產存取權限（如粉專管理員、廣告帳號權限）。",
+            "2. 因乙方目前帳號限制，甲方同意配合以遠端連線（如 Google Remote Desktop）方式進行必要之後台操作。",
+            "3. 甲方應確保廣告素材（圖片、影片）無侵權事宜。"
+        ]),
+        ("第五條：服務費用與給付方式", [
+            f"1. 服務費用：{fee_text}",
+            f"2. 支付時間：{pay_logic}",
+            f"3. 匯款資訊：{BANK_NAME} ({BANK_CODE}) 帳號：{ACCOUNT_NUMBER}"
+        ]),
+        ("第六條：稅務說明", [
+            "1. 乙方為個人工作室（自然人），本服務費用不開立統一發票。",
+            "2. 若甲方需報支費用，請自行依稅法規定開立勞務報酬單，或處理相關代扣繳稅額。"
+        ]),
+        ("第七條：成果歸屬與智慧財產權", [
+            "1. 廣告投放產生之數據與權限歸甲方所有。",
+            "2. 乙方所撰寫之文案與投放策略，於合約存續期間授權甲方使用。"
+        ]),
+        ("第八條：保密義務", [
+            "1. 雙方應對合約內容及因履行本合約所獲知之對方商業機密負保密義務。",
+            "2. 保密期間自合約簽署日起至終止後兩年止。"
+        ]),
+        ("第九條：免責聲明與風險承擔", [
+            "1. 乙方不保證特定成效指標（如特定 ROAS 或點擊數）。",
+            "2. 因平台政策異動、系統故障或不可抗力因素導致廣告中斷，乙方不負賠償責任。"
+        ]),
+        ("第十條：合約變更", ["本合約之任何修改、變更或補充，均應由雙方以書面（含 LINE/Email）為之。"]),
+        ("第十一條：損害賠償", ["如因一方違反本合約導致他方受損，賠償限額以本合約最近一期已支付之服務費用為上限。"]),
+        ("第十二條：合約終止", [
+            "1. 甲方若欲提前終止，應於 14 日前通知乙方。",
+            "2. 已支付之月費或季付優惠費用，於合約啟動後恕不退還。"
+        ]),
+        ("第十三條：爭議處理與管轄法院", ["如因本合約產生爭議，雙方同意以台灣台北地方法院為第一審管轄法院。"]),
+        ("第十四條：其他", ["本合約自簽署日起生效。本合約乙式兩份，由雙方各執一份為憑。"])
+    ]
 
-    def add_cl(title, contents):
-        p_t = doc.add_paragraph(); r_t = p_t.add_run(title); set_run_font(r_t, bold=True)
+    for title, contents in clauses:
+        p_t = doc.add_paragraph()
+        r_t = p_t.add_run(title)
+        set_run_font(r_t, size=11, bold=True)
         for c in contents:
-            if c:
-                p_i = doc.add_paragraph(); p_i.paragraph_format.left_indent = Cm(0.75)
-                r_i = p_i.add_run(c); set_run_font(r_i)
+            p_i = doc.add_paragraph()
+            p_i.paragraph_format.left_indent = Cm(0.75)
+            r_i = p_i.add_run(c)
+            set_run_font(r_i, size=10.5)
 
-    add_cl("第一條　合約期間", [period])
-    add_cl("第二條　服務內容", ["一、固定項目：1.廣告上架 2.監控優化 3.簡易週報。", "二、非固定項目：文案修改建議、到達網頁調整建議。"])
-    add_cl("第三～四條　範圍與配合", ["1.以 Meta 廣告為主。2.廣告費由甲方自付。3.甲方應配合必要之遠端桌面操作設定。"])
-    add_cl("第五～六條　費用與稅務", [price, pay_time, first_pay, f"帳戶：{BANK_NAME} ({BANK_CODE}) {ACCOUNT_NUMBER}", "乙方為自然人，不開立發票。"])
-    add_cl("第七～十四條", ["乙方不保證特定成效，因平台政策中斷不負賠償責任。保密義務 2 年。提前終止需 14 日前通知。如有爭議以臺灣臺北地方法院為管轄法院。"])
+    doc.add_paragraph("\n")
 
-    doc.add_paragraph("")
-    table = doc.add_table(rows=1, cols=2); table.autofit = False
-    c1 = table.cell(0, 0); p1 = c1.paragraphs[0]
-    run1 = p1.add_run(f"甲方：\n{party_a}\n信箱：{email}\n\n簽名：__________\n日期：____/____/____"); set_run_font(run1)
-    c2 = table.cell(0, 1); p2 = c2.paragraphs[0]
-    run2 = p2.add_run(f"乙方：\n{PROVIDER_NAME}\n\n簽名：__________\n日期：____/____/____"); set_run_font(run2)
+    # 4. 簽署欄位
+    table = doc.add_table(rows=1, cols=2)
+    table.autofit = False
+    
+    # 甲方
+    c1 = table.cell(0, 0).paragraphs[0]
+    run1 = c1.add_run(f"甲方（委託方）：\n{party_a}\n\n簽署人：________________\n\n日期：   年   月   日")
+    set_run_font(run1, size=11)
+    
+    # 乙方
+    c2 = table.cell(0, 1).paragraphs[0]
+    run2 = c2.add_run(f"乙方（執行方）：\n{PROVIDER_NAME}\n\n簽署人：________________\n\n日期：   年   月   日")
+    set_run_font(run2, size=11)
 
-    buf = io.BytesIO(); doc.save(buf); buf.seek(0)
-    return buffer.getvalue() if 'buffer' in locals() else buf.getvalue()
+    # 5. 存檔回傳
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.getvalue()
 
 # =========================================================
 # 4) Sidebar
