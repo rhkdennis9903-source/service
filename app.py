@@ -21,7 +21,7 @@ PROVIDER_NAME = "高如慧"
 BANK_NAME = "中國信託商業銀行"
 BANK_CODE = "822"
 ACCOUNT_NUMBER = "783540208870"
-REMOTE_SUPPORT_URL = "https://remotedesktop.google.com/support10"
+REMOTE_SUPPORT_URL = "https://remotedesktop.google.com/support"
 CREATIVES_UPLOAD_URL = "https://metaads-dtwbm3ntmprhjvpv6ptmec.streamlit.app/" 
 BM_TUTORIAL_URL = "https://www.youtube.com/watch?v=caoZAO8tyNs" 
 
