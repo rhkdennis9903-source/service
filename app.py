@@ -22,8 +22,8 @@ BANK_NAME = "中國信託商業銀行"
 BANK_CODE = "822"
 ACCOUNT_NUMBER = "783540208870"
 REMOTE_SUPPORT_URL = "https://remotedesktop.google.com/support"
-CREATIVES_UPLOAD_URL = "https://metaads-dtwbm3ntmprhjvpv6ptmec.streamlit.app/" 
-BM_TUTORIAL_URL = "https://www.youtube.com/watch?v=caoZAO8tyNs" 
+CREATIVES_UPLOAD_URL = "https://metaads-dtwbm3ntmprhjvpv6ptmec.streamlit.app/"
+BM_TUTORIAL_URL = "https://www.youtube.com/watch?v=caoZAO8tyNs"
 
 st.set_page_config(
     page_title="廣告投放服務｜合約＋啟動資料收集",
@@ -100,6 +100,18 @@ def save_phase1_new(data_dict):
         "FALSE", "FALSE", hashed_default # 26-28
     ]
     ws.append_row(row)
+
+# --- [新增] 用於登入後更新 Phase 1 方案資料的函式 ---
+def update_phase1(row_num, plan, start_date, pay_day, pay_date):
+    ws = get_worksheet()
+    # Sheet 欄位順序: plan(5), start_date(6), pay_day(7), pay_date(8)
+    # 注意: update_cell 是 (row, col, value)
+    ws.update_cell(row_num, 5, plan)
+    ws.update_cell(row_num, 6, str(start_date))
+    ws.update_cell(row_num, 7, pay_day)
+    ws.update_cell(row_num, 8, str(pay_date) if pay_date else "")
+    # 同步更新後面用來做合約紀錄的欄位 (第 24 欄也是 plan)
+    ws.update_cell(row_num, 24, plan)
 
 def update_phase2(row_num, p2_data):
     ws = get_worksheet()
@@ -341,14 +353,15 @@ if nav == "第一階段｜合約":
 
     st.subheader("💰 付款方案與日期")
     c1, c2 = st.columns(2)
+    # [修改] 移除了 disabled=(user["role"]=="login")，讓登入者可以修改方案與日期
     with c1:
-        plan = st.radio("方案選擇：", ["17,000元/月（每月付款）", "45,000元/三個月（一次付款）"], index=0 if raw.get("plan") != "45,000元/三個月（一次付款）" else 1, disabled=(user["role"]=="login"))
+        plan = st.radio("方案選擇：", ["17,000元/月（每月付款）", "45,000元/三個月（一次付款）"], index=0 if raw.get("plan") != "45,000元/三個月（一次付款）" else 1)
         s_date_val = datetime.strptime(raw["start_date"], "%Y-%m-%d").date() if raw.get("start_date") else date.today()+timedelta(days=7)
-        s_date = st.date_input("合作啟動日", value=s_date_val, disabled=(user["role"]=="login"))
+        s_date = st.date_input("合作啟動日", value=s_date_val)
     with c2:
-        p_day = st.slider("每月付款日", 1, 28, int(raw.get("pay_day", 5)) if raw.get("pay_day") else 5, disabled=(user["role"]=="login")) if "每月" in plan else 5
+        p_day = st.slider("每月付款日", 1, 28, int(raw.get("pay_day", 5)) if raw.get("pay_day") else 5) if "每月" in plan else 5
         p_date_val = datetime.strptime(raw["pay_date"], "%Y-%m-%d").date() if raw.get("pay_date") else s_date
-        p_date = st.date_input("付款日期", value=p_date_val, disabled=(user["role"]=="login")) if "三個月" in plan else None
+        p_date = st.date_input("付款日期", value=p_date_val) if "三個月" in plan else None
 
     if user["role"] == "new":
         if st.button("🎲 生成案件編號並存檔", type="primary"):
@@ -365,6 +378,20 @@ if nav == "第一階段｜合約":
 
     if user["role"] == "login":
         st.info(f"案件編號：{raw.get('case_id')}")
+
+        # [新增] 登入者更新方案按鈕
+        if st.button("💾 更新合約方案資料"):
+            with st.spinner("更新資料中..."):
+                update_phase1(user["row_num"], plan, s_date, p_day, p_date)
+                # 更新 session 內的資料，讓介面不需要 F5 就能反映
+                st.session_state.user["raw_data"]["plan"] = plan
+                st.session_state.user["raw_data"]["start_date"] = str(s_date)
+                st.session_state.user["raw_data"]["pay_day"] = p_day
+                st.session_state.user["raw_data"]["pay_date"] = str(p_date) if p_date else ""
+            st.success("✅ 方案資料已更新！(重新產生合約即可生效)")
+            time.sleep(1) # 讓使用者看到成功訊息
+            st.rerun()
+
         if st.button("📝 生成 Word 合約"):
             docx = generate_docx_bytes(user["name"], user["email"], plan, s_date, p_day, p_date, raw.get("case_id"))
             st.download_button("⬇️ 下載 Word 合約 (.docx)", docx, f"合約_{raw.get('case_id')}.docx")
